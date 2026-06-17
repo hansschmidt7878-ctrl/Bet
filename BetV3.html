@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Schalter</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .switch {
+        position: relative;
+        width: 80px;
+        height: 40px;
+        background: #ccc;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    .slider {
+        position: absolute;
+        width: 34px;
+        height: 34px;
+        background: white;
+        border-radius: 50%;
+        top: 3px;
+        left: 3px;
+        transition: 0.3s;
+    }
+
+    .on {
+        background: #4CAF50;
+    }
+
+    .on .slider {
+        left: 43px;
+    }
+
+    #status {
+        margin-left: 20px;
+        font-size: 20px;
+    }
+</style>
+</head>
+<body>
+
+<div class="switch" id="switch">
+    <div class="slider"></div>
+</div>
+
+<div id="status">AUS</div>
+
+<script>
+    const sw = document.getElementById("switch");
+    const status = document.getElementById("status");
+
+    sw.addEventListener("click", () => {
+        sw.classList.toggle("on");
+
+        if (sw.classList.contains("on")) {
+            status.textContent = "AN";
+        } else {
+            status.textContent = "AUS";
+        }
+    });
+</script>
+
+</body>
+</html>
