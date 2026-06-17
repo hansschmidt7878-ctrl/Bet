@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WettTracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.8.0/Recharts.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f172a; color: #f1f5f9; font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  select option { background: #1e293b; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
+const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } = Recharts;
+
+// ── Storage ──────────────────────────────────────────────────────────────────
+const STORE_KEY = "wetttracker_v2";
+function loadData() { try { const r = localStorage.getItem(STORE_KEY); return r ? JSON.parse(r) : null; } catch { return null; } }
+function saveData(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch {} }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const fmtShort = n => (n < 0 ? "-" : "") + "€" + Math.abs(n).toFixed(2).replace(".", ",");
+const uid = () => Math.random().toString(36).slice(2, 9);
+const today = () => new Date().toISOString().slice(0, 10);
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+function startOf(h) {
+  const now = new Date();
+  if (h === "Tag") { const d = new Date(now); d.setHours(0,0,0,0); return d; }
+  if (h === "Woche") return addDays(now, -7);
+  if (h === "Monat") return addDays(now, -30);
+  if (h === "3M") return addDays(now, -90);
+  if (h === "6M") return addDays(now, -180);
+  return addDays(now, -365);
+}
+function formatLabel(datum, horizon) {
+  const d = new Date(datum + "T12:00:00");
+  if (horizon === "Tag") return d.toLocaleTimeString("de-DE", {hour:"2-digit",minute:"2-digit"});
+  if (horizon === "Woche") return d.toLocaleDateString("de-DE", {weekday:"short",day:"numeric"});
+  if (horizon === "Monat") return d.toLocaleDateString("de-DE", {day:"numeric",month:"short"});
+  if (horizon === "3M" || horizon === "6M") return d.toLocaleDateString("de-DE", {day:"numeric",month:"short"});
+  return d.toLocaleDateString("de-DE", {month:"short",year:"2-digit"});
+}
+
+const HORIZONS = ["Tag", "Woche", "Monat", "3M", "6M", "Jahr"];
+const FARBEN = ["#34d399","#60a5fa","#f472b6","#fb923c","#a78bfa","#facc15","#38bdf8","#f87171"];
+const DEFAULT = { anbieter: [], transaktionen: [], wetten: [] };
+
+// ── Styles ───────────────────────────────────────────────────────────────────
+const S = {
+  inp: { background:"#0f172a", border:"1px solid #334155", borderRadius:6, color:"#f1f5f9", padding:"9px 12px", width:"100%", fontSize:14, outline:"none", fontFamily:"inherit" },
+  btn: (v="primary") => ({ padding:"8px 16px", borderRadius:6, border:"none", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit",
+    ...(v==="primary"?{background:"#34d399",color:"#0f172a"}:v==="danger"?{background:"#f87171",color:"#fff"}:v==="warn"?{background:"#f59e0b",color:"#000"}:v==="ghost"?{background:"transparent",color:"#94a3b8",border:"1px solid #334155"}:{background:"#334155",color:"#f1f5f9"}) }),
+  card: { background:"#1e293b", border:"1px solid #334155", borderRadius:10, overflow:"hidden" },
+  label: { fontSize:12, color:"#94a3b8", display:"block", marginBottom:5, fontWeight:500 },
+};
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children, wide }) {
+  return (
+    <div onClick={e => e.target===e.currentTarget && onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:24,width:"100%",maxWidth:wide?560:420,maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <span style={{fontWeight:700,fontSize:16}}>{title}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#94a3b8",fontSize:22,cursor:"pointer",lineHeight:1,padding:"0 4px"}}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Row({ children, gap=12 }) { return <div style={{display:"grid",gridTemplateColumns:`repeat(${children.filter?children.filter(Boolean).length:1}, 1fr)`,gap}}>{children}</div>; }
+function Field({ label, children }) { return <div><label style={S.label}>{label}</label>{children}</div>; }
+function Divider() { return <div style={{height:1,background:"#334155",margin:"4px 0"}}/>; }
+
+// ── Guthaben berechnen ────────────────────────────────────────────────────────
+function calcGuthaben(data) {
+  const g = {}, fb = {};
+  data.anbieter.forEach(a => { g[a.id] = 0; fb[a.id] = [...(a.freebets||[])]; });
+  data.transaktionen.forEach(t => {
+    g[t.anbieterId] = (g[t.anbieterId]||0) + (t.art==="ein" ? t.betrag : -t.betrag);
+  });
+  data.wetten.forEach(w => {
+    if (w.status === "offen") return;
+    if (w.typ === "freebet") {
+      // Freebet: nur Nettogewinn wird gutgeschrieben, Einsatz selbst kostet nichts
+      if (w.status === "gewonnen") {
+        const sf = w.steuer ? 0.05 : 0;
+        const nettoGewinn = w.einsatz * w.quote - w.einsatz;
+        g[w.anbieterId] = (g[w.anbieterId]||0) + nettoGewinn * (1 - sf);
+      }
+      // verloren: nichts abziehen (Freebet war gratis)
+    } else {
+      // Echtgeld
+      if (w.status === "gewonnen") {
+        const sf = w.steuer ? 0.05 : 0;
+        const brutto = w.einsatz * w.quote;
+        g[w.anbieterId] = (g[w.anbieterId]||0) + brutto * (1 - sf) - w.einsatz;
+      } else {
+        g[w.anbieterId] = (g[w.anbieterId]||0) - w.einsatz;
+      }
+    }
+  });
+  return { guthaben: g };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// APP
+// ════════════════════════════════════════════════════════════════════════════
+function App() {
+  const [data, setData] = useState(() => loadData() || DEFAULT);
+  const [tab, setTab] = useState(0);
+  useEffect(() => saveData(data), [data]);
+  const upd = patch => setData(d => ({...d, ...patch}));
+  const { guthaben } = useMemo(() => calcGuthaben(data), [data]);
+
+  return (
+    <div style={{minHeight:"100vh"}}>
+      {/* Header */}
+      <div style={{background:"#1e293b",borderBottom:"1px solid #334155",padding:"0 20px",display:"flex",alignItems:"center",gap:24,position:"sticky",top:0,zIndex:100}}>
+        <div style={{padding:"15px 0",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <span style={{fontSize:18}}>🎰</span>
+          <span style={{fontWeight:800,fontSize:15,letterSpacing:"-.3px"}}>WettTracker</span>
+        </div>
+        <div style={{display:"flex",gap:3}}>
+          {["📥 Konten","🎲 Wetten","📈 Statistiken"].map((t,i) => (
+            <button key={i} onClick={() => setTab(i)} style={{padding:"6px 14px",border:"none",borderRadius:6,cursor:"pointer",fontSize:13,fontWeight:600,background:tab===i?"#34d399":"transparent",color:tab===i?"#0f172a":"#94a3b8",transition:"all .15s"}}>{t}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{padding:"20px 20px",maxWidth:1100,margin:"0 auto"}}>
+        {tab===0 && <TabKonten data={data} upd={upd} guthaben={guthaben}/>}
+        {tab===1 && <TabWetten data={data} upd={upd} guthaben={guthaben}/>}
+        {tab===2 && <TabStatistiken data={data} guthaben={guthaben}/>}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 1 — KONTEN
+// ════════════════════════════════════════════════════════════════════════════
+function TabKonten({ data, upd, guthaben }) {
+  const [modal, setModal] = useState(null);
+  const [editA, setEditA] = useState(null);
+  const [editTx, setEditTx] = useState(null);
+  const [editFb, setEditFb] = useState(null);
+  const [selA, setSelA] = useState(null);
+  const [formA, setFormA] = useState({name:"",farbe:FARBEN[0]});
+  const [formTx, setFormTx] = useState({anbieterId:"",art:"ein",betrag:"",datum:today(),notiz:""});
+  const [formFb, setFormFb] = useState({anbieterId:"",betrag:"",ablauf:"",notiz:""});
+
+  const openA = (a=null) => { setEditA(a); setFormA(a?{name:a.name,farbe:a.farbe}:{name:"",farbe:FARBEN[data.anbieter.length%FARBEN.length]}); setModal("anbieter"); };
+  const saveA = () => {
+    if (!formA.name.trim()) return;
+    if (editA) upd({anbieter:data.anbieter.map(a=>a.id===editA.id?{...a,...formA}:a)});
+    else upd({anbieter:[...data.anbieter,{id:uid(),...formA,freebets:[]}]});
+    setModal(null);
+  };
+  const delA = id => { if(!confirm("Anbieter löschen?")) return; upd({anbieter:data.anbieter.filter(a=>a.id!==id)}); };
+
+  const openTx = (tx=null,aid=null) => {
+    setEditTx(tx);
+    setFormTx(tx?{anbieterId:tx.anbieterId,art:tx.art,betrag:String(tx.betrag),datum:tx.datum,notiz:tx.notiz||""}
+               :{anbieterId:aid||data.anbieter[0]?.id||"",art:"ein",betrag:"",datum:today(),notiz:""});
+    setModal("tx");
+  };
+  const saveTx = () => {
+    const b = parseFloat(String(formTx.betrag).replace(",","."));
+    if (!formTx.anbieterId||isNaN(b)||b<=0) return;
+    const e = {...formTx,betrag:b,id:editTx?.id||uid()};
+    if (editTx) upd({transaktionen:data.transaktionen.map(t=>t.id===editTx.id?e:t)});
+    else upd({transaktionen:[...data.transaktionen,e]});
+    setModal(null);
+  };
+  const delTx = id => upd({transaktionen:data.transaktionen.filter(t=>t.id!==id)});
+
+  const openFb = (aid, fb=null) => {
+    setEditFb({aid, fb});
+    setFormFb(fb?{anbieterId:aid,betrag:String(fb.betrag),ablauf:fb.ablauf||"",notiz:fb.notiz||""}:{anbieterId:aid,betrag:"",ablauf:"",notiz:""});
+    setModal("freebet");
+  };
+  const saveFb = () => {
+    const b = parseFloat(String(formFb.betrag).replace(",","."));
+    if (isNaN(b)||b<=0) return;
+    const entry = {id:editFb?.fb?.id||uid(),betrag:b,ablauf:formFb.ablauf,notiz:formFb.notiz,erstellt:today()};
+    upd({anbieter:data.anbieter.map(a=>{
+      if(a.id!==editFb.aid) return a;
+      const fbs = a.freebets||[];
+      return {...a, freebets: editFb.fb ? fbs.map(f=>f.id===editFb.fb.id?entry:f) : [...fbs,entry]};
+    })});
+    setModal(null);
+  };
+  const delFb = (aid, fbid) => upd({anbieter:data.anbieter.map(a=>a.id!==aid?a:{...a,freebets:(a.freebets||[]).filter(f=>f.id!==fbid)})});
+
+  // Zähle verfügbare Freebets (nicht durch Wette verbraucht)
+  const usedFbIds = new Set(data.wetten.filter(w=>w.typ==="freebet"&&w.freebetId).map(w=>w.freebetId));
+  const availFb = aid => (data.anbieter.find(a=>a.id===aid)?.freebets||[]).filter(f=>!usedFbIds.has(f.id));
+
+  const txFiltered = selA ? data.transaktionen.filter(t=>t.anbieterId===selA) : data.transaktionen;
+  const sorted = [...txFiltered].sort((a,b)=>b.datum.localeCompare(a.datum));
+  const totalEin = txFiltered.filter(t=>t.art==="ein").reduce((s,t)=>s+t.betrag,0);
+  const totalAus = txFiltered.filter(t=>t.art==="aus").reduce((s,t)=>s+t.betrag,0);
+
+  return (
+    <div>
+      {/* Anbieter Cards */}
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:20,alignItems:"stretch"}}>
+        {data.anbieter.map(a => {
+          const fbCount = availFb(a.id).length;
+          const fbTotal = availFb(a.id).reduce((s,f)=>s+f.betrag,0);
+          return (
+            <div key={a.id} onClick={()=>setSelA(selA===a.id?null:a.id)}
+              style={{background:"#1e293b",border:`2px solid ${selA===a.id?a.farbe:"#334155"}`,borderRadius:10,padding:"14px 16px",cursor:"pointer",minWidth:170,transition:"border-color .15s",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+                <span style={{width:9,height:9,borderRadius:"50%",background:a.farbe}}/>
+                <span style={{fontWeight:700,fontSize:14}}>{a.name}</span>
+              </div>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>Guthaben</div>
+              <div style={{fontSize:20,fontWeight:800,color:guthaben[a.id]>=0?"#34d399":"#f87171",fontVariantNumeric:"tabular-nums",marginBottom:8}}>
+                {fmtShort(guthaben[a.id]||0)}
+              </div>
+              {fbCount > 0 && (
+                <div style={{background:"#1c2a1c",border:"1px solid #34d399",borderRadius:6,padding:"4px 8px",marginBottom:8,fontSize:12}}>
+                  <span style={{color:"#34d399"}}>🎁 {fbCount} Freebet{fbCount>1?"s":""} · {fmtShort(fbTotal)}</span>
+                </div>
+              )}
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                <button onClick={e=>{e.stopPropagation();openTx(null,a.id)}} style={{...S.btn("primary"),padding:"5px 10px",fontSize:12}}>+ Buchung</button>
+                <button onClick={e=>{e.stopPropagation();openFb(a.id)}} style={{...S.btn("secondary"),padding:"5px 10px",fontSize:12}}>🎁 FB</button>
+                <button onClick={e=>{e.stopPropagation();openA(a)}} style={{...S.btn("ghost"),padding:"5px 9px",fontSize:12}}>✎</button>
+                <button onClick={e=>{e.stopPropagation();delA(a.id)}} style={{...S.btn("danger"),padding:"5px 9px",fontSize:12}}>✕</button>
+              </div>
+              {/* Freebet Liste */}
+              {(a.freebets||[]).length>0 && (
+                <div style={{marginTop:10,borderTop:"1px solid #334155",paddingTop:8}}>
+                  <div style={{fontSize:11,color:"#64748b",marginBottom:5}}>Freebets</div>
+                  {(a.freebets||[]).map(f => {
+                    const used = usedFbIds.has(f.id);
+                    return (
+                      <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4,opacity:used?0.4:1}}>
+                        <span style={{fontSize:12,color:used?"#64748b":"#34d399"}}>{fmtShort(f.betrag)}{used?" (verwendet)":""}</span>
+                        {!used && <div style={{display:"flex",gap:3}}>
+                          <button onClick={e=>{e.stopPropagation();openFb(a.id,f)}} style={{...S.btn("ghost"),padding:"2px 6px",fontSize:11}}>✎</button>
+                          <button onClick={e=>{e.stopPropagation();delFb(a.id,f.id)}} style={{...S.btn("danger"),padding:"2px 6px",fontSize:11}}>✕</button>
+                        </div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div onClick={()=>openA()} style={{background:"#1e293b",border:"2px dashed #334155",borderRadius:10,padding:"14px 16px",cursor:"pointer",minWidth:140,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,color:"#64748b"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#94a3b8"} onMouseLeave={e=>e.currentTarget.style.borderColor="#334155"}>
+          <span style={{fontSize:26}}>+</span><span style={{fontSize:12}}>Anbieter</span>
+        </div>
+      </div>
+
+      {/* Summen */}
+      {data.anbieter.length>0 && (
+        <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+          {[{label:"Eingezahlt",val:totalEin,c:"#34d399"},{label:"Ausgezahlt",val:totalAus,c:"#60a5fa"},{label:"Saldo",val:totalEin-totalAus,c:totalEin-totalAus>=0?"#34d399":"#f87171"}].map(s=>(
+            <div key={s.label} style={{background:"#1e293b",borderRadius:8,padding:"10px 16px",flex:1,minWidth:110}}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:".5px"}}>{s.label}</div>
+              <div style={{fontSize:18,fontWeight:800,color:s.c}}>{fmtShort(s.val)}</div>
+            </div>
+          ))}
+          {selA && <button onClick={()=>setSelA(null)} style={{...S.btn("ghost"),alignSelf:"center",whiteSpace:"nowrap"}}>Filter aufheben</button>}
+          <button onClick={()=>openTx()} style={{...S.btn("primary"),alignSelf:"center",marginLeft:"auto",whiteSpace:"nowrap"}} disabled={data.anbieter.length===0}>+ Buchung</button>
+        </div>
+      )}
+
+      {/* Transaktionen */}
+      <div style={S.card}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid #334155",fontWeight:700,fontSize:14}}>
+          Transaktionen {selA?`— ${data.anbieter.find(a=>a.id===selA)?.name}`:""}
+        </div>
+        {sorted.length===0
+          ? <div style={{padding:32,textAlign:"center",color:"#64748b"}}>Noch keine Transaktionen</div>
+          : <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{color:"#64748b"}}>
+                {["Datum","Anbieter","Art","Betrag","Notiz",""].map(h=><th key={h} style={{padding:"9px 14px",fontWeight:600,borderBottom:"1px solid #334155",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {sorted.map(t=>{
+                  const a=data.anbieter.find(x=>x.id===t.anbieterId);
+                  return (
+                    <tr key={t.id} onMouseEnter={e=>e.currentTarget.style.background="#0f172a"} onMouseLeave={e=>e.currentTarget.style.background="transparent"} style={{borderBottom:"1px solid #1e293b"}}>
+                      <td style={{padding:"9px 14px",color:"#94a3b8",whiteSpace:"nowrap"}}>{t.datum}</td>
+                      <td style={{padding:"9px 14px"}}><span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:7,height:7,borderRadius:"50%",background:a?.farbe||"#64748b"}}/>{a?.name||"?"}</span></td>
+                      <td style={{padding:"9px 14px"}}><span style={{padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:700,background:t.art==="ein"?"#064e3b":"#1e3a5f",color:t.art==="ein"?"#34d399":"#60a5fa"}}>{t.art==="ein"?"Einzahlung":"Auszahlung"}</span></td>
+                      <td style={{padding:"9px 14px",fontWeight:700,color:t.art==="ein"?"#34d399":"#60a5fa",fontVariantNumeric:"tabular-nums"}}>{t.art==="ein"?"+":"-"}{fmtShort(t.betrag)}</td>
+                      <td style={{padding:"9px 14px",color:"#94a3b8",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.notiz||"—"}</td>
+                      <td style={{padding:"9px 14px"}}><div style={{display:"flex",gap:5}}>
+                        <button onClick={()=>openTx(t)} style={{...S.btn("ghost"),padding:"3px 8px",fontSize:12}}>✎</button>
+                        <button onClick={()=>delTx(t.id)} style={{...S.btn("danger"),padding:"3px 8px",fontSize:12}}>✕</button>
+                      </div></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      {/* MODALS */}
+      {modal==="anbieter" && <Modal title={editA?"Anbieter bearbeiten":"Neuer Anbieter"} onClose={()=>setModal(null)}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Field label="Name"><input style={S.inp} value={formA.name} onChange={e=>setFormA({...formA,name:e.target.value})} placeholder="z.B. Tipico"/></Field>
+          <Field label="Farbe">
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {FARBEN.map(f=><div key={f} onClick={()=>setFormA({...formA,farbe:f})} style={{width:26,height:26,borderRadius:"50%",background:f,cursor:"pointer",boxShadow:formA.farbe===f?"0 0 0 3px #fff,0 0 0 5px "+f:"none",transition:"box-shadow .15s"}}/>)}
+            </div>
+          </Field>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+            <button onClick={()=>setModal(null)} style={S.btn("ghost")}>Abbrechen</button>
+            <button onClick={saveA} style={S.btn("primary")}>Speichern</button>
+          </div>
+        </div>
+      </Modal>}
+
+      {modal==="tx" && <Modal title={editTx?"Buchung bearbeiten":"Neue Buchung"} onClose={()=>setModal(null)}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Field label="Anbieter"><select style={S.inp} value={formTx.anbieterId} onChange={e=>setFormTx({...formTx,anbieterId:e.target.value})}>
+            {data.anbieter.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+          </select></Field>
+          <Row><Field label="Art"><select style={S.inp} value={formTx.art} onChange={e=>setFormTx({...formTx,art:e.target.value})}>
+            <option value="ein">Einzahlung</option><option value="aus">Auszahlung</option>
+          </select></Field>
+          <Field label="Betrag (€)"><input style={S.inp} type="number" step="0.01" min="0" value={formTx.betrag} onChange={e=>setFormTx({...formTx,betrag:e.target.value})} placeholder="0,00"/></Field></Row>
+          <Field label="Datum"><input style={S.inp} type="date" value={formTx.datum} onChange={e=>setFormTx({...formTx,datum:e.target.value})}/></Field>
+          <Field label="Notiz (optional)"><input style={S.inp} value={formTx.notiz} onChange={e=>setFormTx({...formTx,notiz:e.target.value})} placeholder="z.B. Willkommensbonus"/></Field>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+            <button onClick={()=>setModal(null)} style={S.btn("ghost")}>Abbrechen</button>
+            <button onClick={saveTx} style={S.btn("primary")}>Speichern</button>
+          </div>
+        </div>
+      </Modal>}
+
+      {modal==="freebet" && <Modal title="Freebet hinzufügen" onClose={()=>setModal(null)}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:"#0f172a",borderRadius:8,padding:"10px 14px",fontSize:13,color:"#94a3b8"}}>
+            🎁 Ein Freebet wird verbraucht sobald du damit wettest. Bei Gewinn erhältst du nur den Nettogewinn (Einsatz × Quote − Einsatz). Bei Verlust verlierst du nichts.
+          </div>
+          <Field label="Freebet-Wert (€)"><input style={S.inp} type="number" step="0.01" min="0" value={formFb.betrag} onChange={e=>setFormFb({...formFb,betrag:e.target.value})} placeholder="z.B. 10,00"/></Field>
+          <Field label="Ablaufdatum (optional)"><input style={S.inp} type="date" value={formFb.ablauf} onChange={e=>setFormFb({...formFb,ablauf:e.target.value})}/></Field>
+          <Field label="Notiz (optional)"><input style={S.inp} value={formFb.notiz} onChange={e=>setFormFb({...formFb,notiz:e.target.value})} placeholder="z.B. Anmeldebonus"/></Field>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+            <button onClick={()=>setModal(null)} style={S.btn("ghost")}>Abbrechen</button>
+            <button onClick={saveFb} style={S.btn("primary")}>Speichern</button>
+          </div>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 2 — WETTEN
+// ════════════════════════════════════════════════════════════════════════════
+function TabWetten({ data, upd, guthaben }) {
+  const [modal, setModal] = useState(false);
+  const [editW, setEditW] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("alle");
+  const [form, setForm] = useState({anbieterId:"",typ:"echtgeld",freebetId:"",einsatz:"",quote:"",steuer:false,datum:today(),notiz:""});
+
+  const usedFbIds = new Set(data.wetten.filter(w=>w.typ==="freebet"&&w.freebetId).map(w=>w.freebetId));
+  const availFb = aid => (data.anbieter.find(a=>a.id===aid)?.freebets||[]).filter(f=>!usedFbIds.has(f.id));
+
+  const openModal = (w=null) => {
+    setEditW(w);
+    if (w) {
+      setForm({anbieterId:w.anbieterId,typ:w.typ||"echtgeld",freebetId:w.freebetId||"",einsatz:String(w.einsatz),quote:String(w.quote),steuer:!!w.steuer,datum:w.datum,notiz:w.notiz||""});
+    } else {
+      const aid = data.anbieter[0]?.id||"";
+      setForm({anbieterId:aid,typ:"echtgeld",freebetId:"",einsatz:"",quote:"",steuer:false,datum:today(),notiz:""});
+    }
+    setModal(true);
+  };
+
+  const handleAnbieterChange = aid => {
+    setForm(f=>({...f,anbieterId:aid,typ:"echtgeld",freebetId:"",einsatz:""}));
+  };
+  const handleTypChange = typ => {
+    const fbs = availFb(form.anbieterId);
+    const firstFb = fbs[0];
+    setForm(f=>({...f,typ,freebetId:typ==="freebet"&&firstFb?firstFb.id:"",einsatz:typ==="freebet"&&firstFb?String(firstFb.betrag):""}));
+  };
+  const handleFbChange = fbid => {
+    const fb = (data.anbieter.find(a=>a.id===form.anbieterId)?.freebets||[]).find(f=>f.id===fbid);
+    setForm(f=>({...f,freebetId:fbid,einsatz:fb?String(fb.betrag):""}));
+  };
+
+  const saveWette = () => {
+    const e = parseFloat(String(form.einsatz).replace(",","."));
+    const q = parseFloat(String(form.quote).replace(",","."));
+    if (!form.anbieterId||isNaN(e)||e<=0||isNaN(q)||q<=1) return;
+    if (form.typ==="freebet"&&!form.freebetId) return;
+    const entry = {...form,einsatz:e,quote:q,id:editW?.id||uid(),status:editW?.status||"offen"};
+    if (editW) upd({wetten:data.wetten.map(w=>w.id===editW.id?entry:w)});
+    else upd({wetten:[...data.wetten,entry]});
+    setModal(false);
+  };
+
+  const setStatus = (id, status) => upd({wetten:data.wetten.map(w=>w.id===id?{...w,status}:w)});
+  const delWette = id => { if(!confirm("Wette löschen?")) return; upd({wetten:data.wetten.filter(w=>w.id!==id)}); };
+
+  const calcWette = w => {
+    const sf = w.steuer ? 0.05 : 0;
+    if (w.typ==="freebet") {
+      const nettoGewinn = w.einsatz * w.quote - w.einsatz;
+      return { auszahlung: nettoGewinn*(1-sf), profit: nettoGewinn*(1-sf) };
+    }
+    const brutto = w.einsatz * w.quote;
+    const auszahlung = brutto*(1-sf);
+    return { auszahlung, profit: auszahlung - w.einsatz };
+  };
+
+  const fbs = availFb(form.anbieterId);
+  const previewE = parseFloat(String(form.einsatz).replace(",","."))||0;
+  const previewQ = parseFloat(String(form.quote).replace(",","."))||0;
+  const previewCalc = previewE>0&&previewQ>1 ? calcWette({...form,einsatz:previewE,quote:previewQ}) : null;
+
+  const filtered = data.wetten.filter(w=>filterStatus==="alle"||w.status===filterStatus).sort((a,b)=>b.datum.localeCompare(a.datum));
+
+  const stats = {
+    gesamt: data.wetten.length,
+    gewonnen: data.wetten.filter(w=>w.status==="gewonnen").length,
+    verloren: data.wetten.filter(w=>w.status==="verloren").length,
+    offen: data.wetten.filter(w=>w.status==="offen").length,
+    profit: data.wetten.filter(w=>w.status!=="offen").reduce((s,w)=>{
+      const c = calcWette(w);
+      return s + (w.status==="gewonnen" ? c.profit : (w.typ==="freebet" ? 0 : -w.einsatz));
+    },0),
+  };
+  const hitrate = (stats.gesamt-stats.offen)>0 ? (stats.gewonnen/(stats.gesamt-stats.offen)*100).toFixed(1) : null;
+
+  return (
+    <div>
+      {/* Stats */}
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+        {[{l:"Gesamt",v:stats.gesamt,c:"#f1f5f9"},{l:"Gewonnen",v:stats.gewonnen,c:"#34d399"},{l:"Verloren",v:stats.verloren,c:"#f87171"},{l:"Offen",v:stats.offen,c:"#94a3b8"},{l:"Trefferquote",v:hitrate?hitrate+"%":"—",c:hitrate>50?"#34d399":"#f87171"},{l:"Profit",v:fmtShort(stats.profit),c:stats.profit>=0?"#34d399":"#f87171"}].map(s=>(
+          <div key={s.l} style={{background:"#1e293b",borderRadius:8,padding:"10px 14px",flex:1,minWidth:90}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:".5px"}}>{s.l}</div>
+            <div style={{fontSize:18,fontWeight:800,color:s.c}}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter + Add */}
+      <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",alignItems:"center"}}>
+        {["alle","offen","gewonnen","verloren"].map(f=>(
+          <button key={f} onClick={()=>setFilterStatus(f)} style={{...S.btn(filterStatus===f?"primary":"ghost"),textTransform:"capitalize",padding:"6px 12px"}}>{f}</button>
+        ))}
+        <button onClick={()=>openModal()} style={{...S.btn("primary"),marginLeft:"auto",whiteSpace:"nowrap"}} disabled={data.anbieter.length===0}>+ Neue Wette</button>
+      </div>
+
+      {/* Tabelle */}
+      <div style={S.card}>
+        {filtered.length===0
+          ? <div style={{padding:40,textAlign:"center",color:"#64748b"}}>{data.anbieter.length===0?"Zuerst einen Anbieter anlegen":"Keine Wetten gefunden"}</div>
+          : <div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+              <thead><tr style={{color:"#64748b"}}>
+                {["Datum","Anbieter","Typ","Einsatz","Quote","Pot. Auszahlung","Profit","St.","Status",""].map(h=><th key={h} style={{padding:"9px 12px",fontWeight:600,borderBottom:"1px solid #334155",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {filtered.map(w=>{
+                  const a=data.anbieter.find(x=>x.id===w.anbieterId);
+                  const c=calcWette(w);
+                  return (
+                    <tr key={w.id} onMouseEnter={e=>e.currentTarget.style.background="#0f172a"} onMouseLeave={e=>e.currentTarget.style.background="transparent"} style={{borderBottom:"1px solid #1a2234"}}>
+                      <td style={{padding:"9px 12px",color:"#94a3b8",whiteSpace:"nowrap"}}>{w.datum}</td>
+                      <td style={{padding:"9px 12px",whiteSpace:"nowrap"}}><span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:7,height:7,borderRadius:"50%",background:a?.farbe||"#64748b"}}/>{a?.name||"?"}</span></td>
+                      <td style={{padding:"9px 12px"}}>
+                        {w.typ==="freebet"
+                          ? <span style={{padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:"#1c2a1c",color:"#34d399",border:"1px solid #34d399"}}>🎁 Freebet</span>
+                          : <span style={{padding:"2px 8px",borderRadius:20,fontSize:11,fontWeight:700,background:"#1e293b",color:"#60a5fa",border:"1px solid #334155"}}>💰 Echtgeld</span>}
+                      </td>
+                      <td style={{padding:"9px 12px",fontVariantNumeric:"tabular-nums"}}>{fmtShort(w.einsatz)}</td>
+                      <td style={{padding:"9px 12px",color:"#60a5fa",fontWeight:600}}>{w.quote.toFixed(2)}</td>
+                      <td style={{padding:"9px 12px",color:"#a78bfa",fontVariantNumeric:"tabular-nums"}}>{fmtShort(c.auszahlung)}</td>
+                      <td style={{padding:"9px 12px",fontWeight:700,color:c.profit>=0?"#34d399":"#f87171",fontVariantNumeric:"tabular-nums"}}>
+                        {w.status==="offen"?"—":w.status==="gewonnen"?"+"+fmtShort(c.profit):w.typ==="freebet"?"—":"-"+fmtShort(w.einsatz)}
+                      </td>
+                      <td style={{padding:"9px 12px",fontSize:11,color:w.steuer?"#f59e0b":"#64748b"}}>{w.steuer?"5%":"—"}</td>
+                      <td style={{padding:"9px 12px",whiteSpace:"nowrap"}}>
+                        <span style={{padding:"2px 9px",borderRadius:20,fontSize:11,fontWeight:700,
+                          background:w.status==="gewonnen"?"#064e3b":w.status==="verloren"?"#7f1d1d":"#0f172a",
+                          color:w.status==="gewonnen"?"#34d399":w.status==="verloren"?"#f87171":"#94a3b8",
+                          border:"1px solid "+(w.status==="gewonnen"?"#34d399":w.status==="verloren"?"#f87171":"#334155")}}>
+                          {w.status.charAt(0).toUpperCase()+w.status.slice(1)}
+                        </span>
+                      </td>
+                      <td style={{padding:"9px 12px"}}>
+                        <div style={{display:"flex",gap:4,flexWrap:"nowrap"}}>
+                          {w.status==="offen" && <>
+                            <button onClick={()=>setStatus(w.id,"gewonnen")} style={{...S.btn("primary"),padding:"4px 8px",fontSize:11,whiteSpace:"nowrap"}}>✓ Gewonnen</button>
+                            <button onClick={()=>setStatus(w.id,"verloren")} style={{...S.btn("danger"),padding:"4px 8px",fontSize:11,whiteSpace:"nowrap"}}>✕ Verloren</button>
+                          </>}
+                          {w.status!=="offen" && <button onClick={()=>setStatus(w.id,"offen")} style={{...S.btn("ghost"),padding:"4px 8px",fontSize:11}}>↩</button>}
+                          <button onClick={()=>openModal(w)} style={{...S.btn("ghost"),padding:"4px 8px",fontSize:11}}>✎</button>
+                          <button onClick={()=>delWette(w.id)} style={{...S.btn("danger"),padding:"4px 8px",fontSize:11}}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      {/* MODAL */}
+      {modal && <Modal title={editW?"Wette bearbeiten":"Neue Wette"} onClose={()=>setModal(false)} wide>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Field label="Anbieter">
+            <select style={S.inp} value={form.anbieterId} onChange={e=>handleAnbieterChange(e.target.value)}>
+              {data.anbieter.map(a=><option key={a.id} value={a.id}>{a.name} (Guthaben: {fmtShort(guthaben[a.id]||0)})</option>)}
+            </select>
+          </Field>
+
+          {/* Typ-Auswahl */}
+          <Field label="Einsatztyp">
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>handleTypChange("echtgeld")} style={{...S.btn(form.typ==="echtgeld"?"primary":"ghost"),flex:1}}>💰 Echtgeld</button>
+              <button onClick={()=>handleTypChange("freebet")} style={{...S.btn(form.typ==="freebet"?"primary":"ghost"),flex:1}} disabled={availFb(form.anbieterId).length===0}>
+                🎁 Freebet {availFb(form.anbieterId).length===0?"(keine verfügbar)":"("+availFb(form.anbieterId).length+" verfügbar)"}
+              </button>
+            </div>
+          </Field>
+
+          {/* Freebet-Auswahl */}
+          {form.typ==="freebet" && fbs.length>0 && (
+            <Field label="Freebet auswählen">
+              <select style={S.inp} value={form.freebetId} onChange={e=>handleFbChange(e.target.value)}>
+                {fbs.map(f=><option key={f.id} value={f.id}>{fmtShort(f.betrag)}{f.notiz?" — "+f.notiz:""}{f.ablauf?" (bis "+f.ablauf+")":""}</option>)}
+              </select>
+            </Field>
+          )}
+
+          <Row>
+            <Field label={form.typ==="freebet"?"Freebet-Einsatz (€)":"Einsatz (€)"}>
+              <input style={{...S.inp,color:form.typ==="freebet"?"#64748b":"#f1f5f9"}} type="number" step="0.01" min="0"
+                value={form.einsatz} readOnly={form.typ==="freebet"}
+                onChange={e=>form.typ!=="freebet"&&setForm({...form,einsatz:e.target.value})} placeholder="0,00"/>
+            </Field>
+            <Field label="Quote">
+              <input style={S.inp} type="number" step="0.01" min="1.01" value={form.quote} onChange={e=>setForm({...form,quote:e.target.value})} placeholder="z.B. 2,50"/>
+            </Field>
+          </Row>
+
+          {/* Steuer Toggle */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"#0f172a",borderRadius:8,padding:"10px 14px"}}>
+            <div>
+              <div style={{fontSize:13,fontWeight:600}}>5% Wettsteuer</div>
+              <div style={{fontSize:11,color:"#64748b",marginTop:2}}>Wird auf den Bruttogewinn (Einsatz × Quote) angerechnet</div>
+            </div>
+            <button onClick={()=>setForm({...form,steuer:!form.steuer})} style={{width:44,height:24,borderRadius:12,border:"none",cursor:"pointer",position:"relative",background:form.steuer?"#f59e0b":"#334155",transition:"background .2s",flexShrink:0}}>
+              <span style={{position:"absolute",top:3,left:form.steuer?22:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
+            </button>
+          </div>
+
+          {/* Vorschau */}
+          {previewCalc && (
+            <div style={{background:"#0f172a",borderRadius:8,padding:"12px 14px",fontSize:13,borderLeft:"3px solid #a78bfa"}}>
+              <div style={{color:"#64748b",marginBottom:6,fontSize:11,textTransform:"uppercase",letterSpacing:".5px"}}>Vorschau</div>
+              {form.typ==="freebet" ? <>
+                <div>Nettogewinn (bei Gewinn): <b style={{color:"#34d399"}}>{fmtShort(previewCalc.profit)}</b></div>
+                {form.steuer && <div style={{color:"#f59e0b",fontSize:12}}>inkl. 5% Steuer abgezogen</div>}
+                <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Bei Verlust: kein Verlust (Freebet)</div>
+              </> : <>
+                <div>Bruttoauszahlung: <b style={{color:"#a78bfa"}}>{fmtShort(previewE*previewQ)}</b></div>
+                {form.steuer && <div style={{color:"#f59e0b"}}>− 5% Steuer: −{fmtShort(previewE*previewQ*0.05)}</div>}
+                <div>Netttoauszahlung: <b style={{color:"#34d399"}}>{fmtShort(previewCalc.auszahlung)}</b></div>
+                <div style={{color: previewCalc.profit>=0?"#34d399":"#f87171"}}>Profit: {previewCalc.profit>=0?"+":""}{fmtShort(previewCalc.profit)}</div>
+              </>}
+            </div>
+          )}
+
+          <Row>
+            <Field label="Datum"><input style={S.inp} type="date" value={form.datum} onChange={e=>setForm({...form,datum:e.target.value})}/></Field>
+            <Field label="Notiz (optional)"><input style={S.inp} value={form.notiz} onChange={e=>setForm({...form,notiz:e.target.value})} placeholder="z.B. BVB vs Bayern"/></Field>
+          </Row>
+
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+            <button onClick={()=>setModal(false)} style={S.btn("ghost")}>Abbrechen</button>
+            <button onClick={saveWette} style={S.btn("primary")}>Speichern</button>
+          </div>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TAB 3 — STATISTIKEN
+// ════════════════════════════════════════════════════════════════════════════
+function TabStatistiken({ data, guthaben }) {
+  const [horizon, setHorizon] = useState("Monat");
+
+  const calcWette = w => {
+    const sf = w.steuer ? 0.05 : 0;
+    if (w.typ==="freebet") {
+      const n = w.einsatz*w.quote - w.einsatz;
+      return { profit: n*(1-sf) };
+    }
+    return { profit: w.einsatz*w.quote*(1-sf) - w.einsatz };
+  };
+
+  const totalEin = data.transaktionen.filter(t=>t.art==="ein").reduce((s,t)=>s+t.betrag,0);
+  const totalAus = data.transaktionen.filter(t=>t.art==="aus").reduce((s,t)=>s+t.betrag,0);
+  const totalGuthaben = Object.values(guthaben).reduce((s,v)=>s+v,0);
+  const totalWettenProfit = data.wetten.filter(w=>w.status!=="offen").reduce((s,w)=>{
+    const c=calcWette(w);
+    return s + (w.status==="gewonnen" ? c.profit : (w.typ==="freebet" ? 0 : -w.einsatz));
+  },0);
+
+  const chartData = useMemo(() => {
+    const cutoff = startOf(horizon).toISOString().slice(0,10);
+    const events = [];
+    data.transaktionen.forEach(t => events.push({datum:t.datum,type:"tx",data:t}));
+    data.wetten.filter(w=>w.status!=="offen").forEach(w => events.push({datum:w.datum,type:"wette",data:w}));
+    events.sort((a,b)=>a.datum.localeCompare(b.datum));
+
+    let cumTx=0, cumWetten=0;
+    events.filter(e=>e.datum<cutoff).forEach(e=>{
+      if(e.type==="tx") cumTx += e.data.art==="ein"?e.data.betrag:-e.data.betrag;
+      else { const c=calcWette(e.data); cumWetten += e.data.status==="gewonnen"?c.profit:(e.data.typ==="freebet"?0:-e.data.einsatz); }
+    });
+
+    const byDay = {};
+    events.filter(e=>e.datum>=cutoff).forEach(e=>{ if(!byDay[e.datum])byDay[e.datum]=[]; byDay[e.datum].push(e); });
+
+    const result = [{datum:cutoff,einAus:cumTx,wetten:cumWetten,gesamt:cumTx+cumWetten}];
+    let rTx=cumTx, rW=cumWetten;
+    Object.keys(byDay).sort().forEach(d=>{
+      byDay[d].forEach(e=>{
+        if(e.type==="tx") rTx += e.data.art==="ein"?e.data.betrag:-e.data.betrag;
+        else { const c=calcWette(e.data); rW += e.data.status==="gewonnen"?c.profit:(e.data.typ==="freebet"?0:-e.data.einsatz); }
+      });
+      result.push({datum:d,einAus:rTx,wetten:rW,gesamt:rTx+rW});
+    });
+    const todayStr=today();
+    if(!result.length||result[result.length-1].datum!==todayStr) {
+      const l=result[result.length-1]||{einAus:0,wetten:0,gesamt:0};
+      result.push({datum:todayStr,einAus:l.einAus,wetten:l.wetten,gesamt:l.gesamt});
+    }
+    return result.map(p=>({...p,label:formatLabel(p.datum,horizon)}));
+  }, [data, horizon]);
+
+  const TT = ({ active, payload, label }) => {
+    if(!active||!payload?.length) return null;
+    return <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,padding:"10px 14px",fontSize:12}}>
+      <div style={{color:"#94a3b8",marginBottom:6}}>{label}</div>
+      {payload.map(p=><div key={p.name} style={{color:p.color,marginBottom:2}}>{p.name}: <b>{fmtShort(p.value)}</b></div>)}
+    </div>;
+  };
+
+  const interval = Math.max(0, Math.floor(chartData.length/7)-1);
+
+  return (
+    <div>
+      <div style={{display:"flex",gap:10,marginBottom:20,flexWrap:"wrap"}}>
+        {[{l:"Eingezahlt",v:fmtShort(totalEin),c:"#34d399"},{l:"Ausgezahlt",v:fmtShort(totalAus),c:"#60a5fa"},{l:"Guthaben (Anbieter)",v:fmtShort(totalGuthaben),c:"#a78bfa"},{l:"Wetten-Profit",v:fmtShort(totalWettenProfit),c:totalWettenProfit>=0?"#34d399":"#f87171"},{l:"Gesamtbilanz",v:fmtShort(totalAus-totalEin+totalGuthaben),c:(totalAus-totalEin+totalGuthaben)>=0?"#34d399":"#f87171"}].map(s=>(
+          <div key={s.l} style={{background:"#1e293b",borderRadius:8,padding:"10px 14px",flex:1,minWidth:110}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:3,textTransform:"uppercase",letterSpacing:".5px"}}>{s.l}</div>
+            <div style={{fontSize:17,fontWeight:800,color:s.c}}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"flex",gap:6,marginBottom:20}}>
+        {HORIZONS.map(h=><button key={h} onClick={()=>setHorizon(h)} style={{...S.btn(horizon===h?"primary":"ghost"),padding:"6px 14px",fontSize:12}}>{h}</button>)}
+      </div>
+
+      {[{key:"wetten",label:"Interner Wetten-Profit",color:"#34d399",desc:"Profit aus Wetten inkl. Freebets"},
+        {key:"einAus",label:"Ein-/Auszahlungssaldo",color:"#60a5fa",desc:"Kumulierter Saldo der Ein- und Auszahlungen"},
+        {key:"gesamt",label:"Gesamtbilanz",color:"#a78bfa",desc:"Wetten-Profit + Ein-/Auszahlungssaldo"}
+      ].map(curve=>(
+        <div key={curve.key} style={{...S.card,padding:"18px 18px 6px",marginBottom:16}}>
+          <div style={{fontWeight:700,fontSize:14,color:curve.color,marginBottom:2}}>{curve.label}</div>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>{curve.desc}</div>
+          <ResponsiveContainer width="100%" height={180}>
+            <LineChart data={chartData} margin={{top:8,right:8,left:8,bottom:0}}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false}/>
+              <XAxis dataKey="label" tick={{fill:"#64748b",fontSize:11}} tickLine={false} axisLine={false} interval={interval}/>
+              <YAxis tick={{fill:"#64748b",fontSize:11}} tickLine={false} axisLine={false} tickFormatter={v=>v.toFixed(0)+"€"} width={52}/>
+              <Tooltip content={<TT/>}/>
+              <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 2"/>
+              <Line type="monotone" dataKey={curve.key} name={curve.label} stroke={curve.color} strokeWidth={2.5} dot={false} activeDot={{r:5,fill:curve.color}}/>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      ))}
+
+      <div style={{...S.card,padding:"18px 18px 6px"}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:2}}>Alle Kurven im Vergleich</div>
+        <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>Überblick über alle drei Metriken</div>
+        <ResponsiveContainer width="100%" height={200}>
+          <LineChart data={chartData} margin={{top:8,right:8,left:8,bottom:0}}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#0f172a" vertical={false}/>
+            <XAxis dataKey="label" tick={{fill:"#64748b",fontSize:11}} tickLine={false} axisLine={false} interval={interval}/>
+            <YAxis tick={{fill:"#64748b",fontSize:11}} tickLine={false} axisLine={false} tickFormatter={v=>v.toFixed(0)+"€"} width={52}/>
+            <Tooltip content={<TT/>}/>
+            <Legend iconType="circle" iconSize={7} wrapperStyle={{fontSize:12,color:"#94a3b8",paddingTop:8}}/>
+            <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 2"/>
+            <Line type="monotone" dataKey="wetten" name="Wetten-Profit" stroke="#34d399" strokeWidth={2} dot={false} activeDot={{r:4}}/>
+            <Line type="monotone" dataKey="einAus" name="Ein-/Auszahlungen" stroke="#60a5fa" strokeWidth={2} dot={false} activeDot={{r:4}}/>
+            <Line type="monotone" dataKey="gesamt" name="Gesamtbilanz" stroke="#a78bfa" strokeWidth={2.5} dot={false} activeDot={{r:4}}/>
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
