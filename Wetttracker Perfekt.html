@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>WettTracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f172a;color:#f1f5f9;font-family:system-ui,sans-serif;font-size:14px;min-height:100vh}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+input,select,button{font-family:inherit;font-size:14px}
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+input:focus,select:focus{outline:2px solid #34d399;outline-offset:1px}
+
+/* Layout */
+#header{background:#1e293b;border-bottom:1px solid #334155;padding:0 16px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+#logo{padding:14px 0;font-weight:800;font-size:15px;display:flex;align-items:center;gap:7px;flex-shrink:0}
+.tabs{display:flex;gap:3px}
+.tab-btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:#94a3b8;transition:all .15s}
+.tab-btn.active{background:#34d399;color:#0f172a}
+#content{padding:18px 16px;max-width:1100px;margin:0 auto}
+.page{display:none}.page.active{display:block}
+
+/* Cards & Tables */
+.card{background:#1e293b;border:1px solid #334155;border-radius:10px;overflow:hidden;margin-bottom:16px}
+.card-header{padding:12px 16px;border-bottom:1px solid #334155;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{padding:9px 12px;font-weight:600;color:#64748b;text-align:left;border-bottom:1px solid #334155;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid #0f172a;white-space:nowrap}
+tr:hover td{background:#0f172a}
+.empty{padding:36px;text-align:center;color:#64748b}
+
+/* Buttons */
+.btn{padding:7px 14px;border-radius:6px;border:none;cursor:pointer;font-weight:600;font-size:13px;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-primary{background:#34d399;color:#0f172a}
+.btn-danger{background:#f87171;color:#fff}
+.btn-ghost{background:transparent;color:#94a3b8;border:1px solid #334155}
+.btn-secondary{background:#334155;color:#f1f5f9}
+.btn-warn{background:#f59e0b;color:#000}
+.btn-sm{padding:4px 9px;font-size:12px}
+
+/* Form */
+.inp{background:#0f172a;border:1px solid #334155;border-radius:6px;color:#f1f5f9;padding:8px 11px;width:100%}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:#94a3b8;margin-bottom:4px;font-weight:500}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* Modal */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal-box{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:22px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto}
+.modal-box.wide{max-width:520px}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.modal-title{font-weight:700;font-size:15px}
+.modal-close{background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;line-height:1;padding:0 3px}
+
+/* Badges */
+.badge{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700;border:1px solid}
+.badge-green{background:#064e3b;color:#34d399;border-color:#34d399}
+.badge-red{background:#7f1d1d;color:#f87171;border-color:#f87171}
+.badge-gray{background:#0f172a;color:#94a3b8;border-color:#334155}
+.badge-blue{background:#1e3a5f;color:#60a5fa;border-color:#60a5fa}
+.badge-yellow{background:#1c1a00;color:#f59e0b;border-color:#f59e0b}
+.badge-purple{background:#1e1b4b;color:#a78bfa;border-color:#a78bfa}
+
+/* KPI strip */
+.kpi-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.kpi{background:#1e293b;border-radius:8px;padding:10px 14px;flex:1;min-width:90px}
+.kpi-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.kpi-value{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+
+/* Anbieter cards */
+.anbieter-grid{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;align-items:flex-start}
+.anbieter-card{background:#1e293b;border:2px solid #334155;border-radius:10px;padding:14px;min-width:165px;cursor:pointer;transition:border-color .15s}
+.anbieter-card:hover{border-color:#64748b}
+.anbieter-card.selected{border-color:var(--farbe,#34d399)}
+.add-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:#64748b;min-height:100px;border-style:dashed!important}
+.add-card:hover{color:#94a3b8}
+
+/* Toggle */
+.toggle-wrap{display:flex;align-items:center;gap:10px;background:#0f172a;border-radius:8px;padding:10px 14px}
+.toggle-btn{width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0}
+.toggle-knob{position:absolute;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s}
+
+/* Typ buttons */
+.typ-btn{flex:1;padding:8px;border-radius:6px;border:1px solid #334155;cursor:pointer;font-weight:600;font-size:13px;background:#0f172a;color:#64748b;transition:all .15s}
+.typ-btn.active{background:#34d399;color:#0f172a;border-color:#34d399}
+.typ-btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* Preview box */
+.preview-box{background:#0f172a;border-radius:8px;padding:11px 14px;font-size:13px;border-left:3px solid #a78bfa;line-height:1.7}
+
+/* Horizon */
+.horizon-strip{display:flex;gap:5px;margin-bottom:16px;flex-wrap:wrap}
+.hz-btn{padding:5px 13px;border-radius:6px;border:1px solid #334155;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#94a3b8}
+.hz-btn.active{background:#34d399;color:#0f172a;border-color:#34d399}
+
+/* Chart wrapper */
+.chart-card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px 16px 6px;margin-bottom:14px}
+.chart-title{font-weight:700;font-size:14px;margin-bottom:2px}
+.chart-sub{font-size:12px;color:#64748b;margin-bottom:14px}
+.chart-wrap{position:relative;height:170px}
+
+/* Stat sub-tabs */
+.stat-tab-btn{padding:6px 14px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#64748b;transition:all .15s}
+.stat-tab-btn.active{background:#34d399;color:#0f172a}
+
+/* Fb tag */
+.fb-tag{background:#1c2a1c;border:1px solid #34d399;border-radius:6px;padding:3px 8px;font-size:12px;color:#34d399;display:inline-block;margin-top:5px}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="logo">🎰 WettTracker</div>
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab(0)">🏠 Übersicht</button>
+    <button class="tab-btn" onclick="showTab(1)">📥 Konten</button>
+    <button class="tab-btn" onclick="showTab(2)">🎲 Wetten</button>
+    <button class="tab-btn" onclick="showTab(3)">📈 Statistiken</button>
+  </div>
+</div>
+
+<div id="content">
+  <!-- TAB 0: ÜBERSICHT -->
+  <div class="page active" id="page0">
+    <div id="overviewContent"></div>
+  </div>
+
+  <!-- TAB 1: KONTEN -->
+  <div class="page" id="page1">
+    <div class="anbieter-grid" id="anbieterGrid"></div>
+    <div class="kpi-strip" id="txKpis" style="display:none"></div>
+    <div class="card">
+      <div class="card-header">
+        <span id="txTitle">Transaktionen</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="filterOffBtn" onclick="clearFilter()" style="display:none">Filter aufheben</button>
+          <button class="btn btn-primary btn-sm" onclick="openTxModal()" id="addTxBtn">+ Buchung</button>
+        </div>
+      </div>
+      <div id="txTableWrap"></div>
+    </div>
+  </div>
+
+  <!-- TAB 1: WETTEN -->
+  <div class="page" id="page2">
+    <div class="kpi-strip" id="wettenKpis"></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ghost btn-sm filter-status active" data-s="alle" onclick="setWettenFilter('alle')">Alle</button>
+      <button class="btn btn-ghost btn-sm filter-status" data-s="offen" onclick="setWettenFilter('offen')">Offen</button>
+      <button class="btn btn-ghost btn-sm filter-status" data-s="gewonnen" onclick="setWettenFilter('gewonnen')">Gewonnen</button>
+      <button class="btn btn-ghost btn-sm filter-status" data-s="verloren" onclick="setWettenFilter('verloren')">Verloren</button>
+      <button class="btn btn-primary btn-sm" onclick="openWetteModal()" style="margin-left:auto" id="addWetteBtn">+ Neue Wette</button>
+    </div>
+    <div class="card">
+      <div id="wettenTableWrap"></div>
+    </div>
+  </div>
+
+  <!-- TAB 2: STATISTIKEN -->
+  <div class="page" id="page3">
+    <div class="kpi-strip" id="statsKpis"></div>
+    <!-- Sub-Tabs -->
+    <div style="display:flex;gap:4px;margin-bottom:16px;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:4px;width:fit-content">
+      <button class="stat-tab-btn active" data-st="0" onclick="setStatTab(0)">📈 Wetten-Profit</button>
+      <button class="stat-tab-btn" data-st="1" onclick="setStatTab(1)">💶 Ein-/Auszahlungen</button>
+      <button class="stat-tab-btn" data-st="2" onclick="setStatTab(2)">🏦 Guthaben</button>
+    </div>
+    <!-- Navigation: Horizon OR Tag/Woche nav -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <div class="horizon-strip" id="horizonStrip" style="margin-bottom:0"></div>
+      <div id="navStrip" style="display:none;align-items:center;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="navPrev()">‹</button>
+        <span id="navLabel" style="font-size:13px;font-weight:600;color:#f1f5f9;min-width:140px;text-align:center"></span>
+        <button class="btn btn-ghost btn-sm" onclick="navNext()">›</button>
+        <button class="btn btn-ghost btn-sm" onclick="navToday()">Heute</button>
+      </div>
+    </div>
+    <div id="chartsWrap"></div>
+  </div>
+</div>
+
+<!-- MODAL: Anbieter -->
+<div class="modal-bg" id="modalAnbieter">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="modalAnbieterTitle">Neuer Anbieter</span>
+      <button class="modal-close" onclick="closeModal('modalAnbieter')">✕</button>
+    </div>
+    <div class="field"><label>Name</label><input class="inp" id="aName" placeholder="z.B. Tipico"></div>
+    <div class="field"><label>Farbe</label><div id="farbPicker" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('modalAnbieter')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveAnbieter()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Transaktion -->
+<div class="modal-bg" id="modalTx">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTxTitle">Neue Buchung</span>
+      <button class="modal-close" onclick="closeModal('modalTx')">✕</button>
+    </div>
+    <div class="field"><label>Anbieter</label><select class="inp" id="txAnbieter"></select></div>
+    <div class="row2">
+      <div class="field"><label>Art</label>
+        <select class="inp" id="txArt">
+          <option value="ein">Einzahlung</option>
+          <option value="aus">Auszahlung</option>
+        </select>
+      </div>
+      <div class="field"><label>Betrag (€)</label><input class="inp" type="number" step="0.01" min="0" id="txBetrag" placeholder="0,00"></div>
+    </div>
+    <div class="field"><label>Datum</label><input class="inp" type="date" id="txDatum"></div>
+    <div class="field"><label>Notiz (optional)</label><input class="inp" id="txNotiz" placeholder="z.B. Willkommensbonus"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('modalTx')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveTx()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Freebet -->
+<div class="modal-bg" id="modalFb">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Freebet hinzufügen</span>
+      <button class="modal-close" onclick="closeModal('modalFb')">✕</button>
+    </div>
+    <div style="background:#0f172a;border-radius:8px;padding:10px 14px;font-size:12px;color:#94a3b8;margin-bottom:14px;line-height:1.6">
+      🎁 Bei <b>Gewinn</b> erhältst du Einsatz × Quote − Einsatz (kein Einsatz zurück).<br>
+      Bei <b>Verlust</b> verlierst du nichts — Freebet wird trotzdem verbraucht.
+    </div>
+    <div class="field"><label>Freebet-Wert (€)</label><input class="inp" type="number" step="0.01" min="0" id="fbBetrag" placeholder="z.B. 10,00"></div>
+    <div class="row2">
+      <div class="field"><label>Ablaufdatum (optional)</label><input class="inp" type="date" id="fbAblauf"></div>
+      <div class="field"><label>Notiz (optional)</label><input class="inp" id="fbNotiz" placeholder="z.B. Anmeldebonus"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn btn-ghost" onclick="closeModal('modalFb')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveFb()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Wette -->
+<div class="modal-bg" id="modalWette">
+  <div class="modal-box wide">
+    <div class="modal-header">
+      <span class="modal-title" id="modalWetteTitle">Neue Wette</span>
+      <button class="modal-close" onclick="closeModal('modalWette')">✕</button>
+    </div>
+    <div class="field"><label>Anbieter</label>
+      <select class="inp" id="wAnbieter" onchange="onWAnbieterChange()"></select>
+    </div>
+    <div class="field"><label>Einsatztyp</label>
+      <div style="display:flex;gap:8px">
+        <button class="typ-btn active" id="typEcht" onclick="setTyp('echtgeld')">💰 Echtgeld</button>
+        <button class="typ-btn" id="typFb" onclick="setTyp('freebet')">🎁 Freebet</button>
+      </div>
+    </div>
+    <div class="field" id="fbSelectWrap" style="display:none"><label>Freebet auswählen</label>
+      <select class="inp" id="wFreebetId" onchange="onFbSelect()"></select>
+    </div>
+    <div class="row2">
+      <div class="field"><label id="einsatzLabel">Einsatz (€)</label>
+        <input class="inp" type="number" step="0.01" min="0" id="wEinsatz" placeholder="0,00" oninput="updatePreview()">
+      </div>
+      <div class="field"><label>Quote</label>
+        <input class="inp" type="number" step="0.01" min="1.01" id="wQuote" placeholder="z.B. 2,50" oninput="updatePreview()">
+      </div>
+    </div>
+    <!-- Steuer Toggle im Formular -->
+    <div class="toggle-wrap field" style="margin-bottom:12px">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">5% Wettsteuer</div>
+        <div style="font-size:11px;color:#64748b;margin-top:2px">Auf Bruttogewinn (Einsatz × Quote)</div>
+      </div>
+      <button class="toggle-btn" id="steuerToggle" onclick="toggleSteuer()" style="background:#334155">
+        <span class="toggle-knob" id="steuerKnob" style="left:3px"></span>
+      </button>
+      <span id="steuerLabel" style="font-size:12px;font-weight:600;color:#64748b;width:28px">AUS</span>
+    </div>
+    <div class="preview-box" id="wPreview" style="display:none;margin-bottom:12px"></div>
+    <div class="row2">
+      <div class="field"><label>Datum</label><input class="inp" type="date" id="wDatum"></div>
+      <div class="field"><label>Notiz (optional)</label><input class="inp" id="wNotiz" placeholder="z.B. BVB vs Bayern"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal('modalWette')">Abbrechen</button>
+      <button class="btn btn-primary" onclick="saveWette()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Bestätigung -->
+<div class="modal-bg" id="modalConfirm">
+  <div class="modal-box" style="max-width:340px;text-align:center">
+    <div style="font-size:32px;margin-bottom:12px">🗑️</div>
+    <div style="font-weight:700;font-size:16px;margin-bottom:8px" id="confirmTitle">Wirklich löschen?</div>
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:20px" id="confirmText">Diese Aktion kann nicht rückgängig gemacht werden.</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-ghost" onclick="closeModal('modalConfirm')">Abbrechen</button>
+      <button class="btn btn-danger" id="confirmOkBtn">Ja, löschen</button>
+    </div>
+  </div>
+</div>
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const STORE = 'wetttracker_v3';
+let D = load();
+let selAnbieter = null;
+let wettenFilter = 'alle';
+let curHorizon = 'Monat';
+let editAnbieterId = null;
+let editTxId = null;
+let editWetteId = null;
+let editFbData = null; // {aid, fbId}
+let curFarbe = '#34d399';
+let wTyp = 'echtgeld';
+let wSteuer = false;
+let charts = {};
+
+const FARBEN = ['#34d399','#60a5fa','#f472b6','#fb923c','#a78bfa','#facc15','#38bdf8','#f87171'];
+const HORIZONS = ['Tag','Woche','Monat','3M','6M','Jahr'];
+
+function load() {
+  try { const r = localStorage.getItem(STORE); if(r) return JSON.parse(r); } catch{}
+  return {anbieter:[], transaktionen:[], wetten:[]};
+}
+function save() { try { localStorage.setItem(STORE, JSON.stringify(D)); } catch{} }
+function uid() { return Math.random().toString(36).slice(2,9); }
+function today() { return new Date().toISOString().slice(0,10); }
+function fmt(n) { return (n<0?'-':'')+'€'+Math.abs(n).toFixed(2).replace('.',','); }
+
+// ── Guthaben ──────────────────────────────────────────────────────────────────
+function calcGuthaben() {
+  const g = {};
+  D.anbieter.forEach(a => g[a.id] = 0);
+  D.transaktionen.forEach(t => g[t.anbieterId] = (g[t.anbieterId]||0) + (t.art==='ein'?t.betrag:-t.betrag));
+  const usedFb = new Set(D.wetten.filter(w=>w.typ==='freebet'&&w.freebetId).map(w=>w.freebetId));
+  D.wetten.forEach(w => {
+    if(w.status==='offen') return;
+    const sf = w.steuer ? 0.05 : 0;
+    if(w.typ==='freebet') {
+      if(w.status==='gewonnen') g[w.anbieterId] = (g[w.anbieterId]||0) + (w.einsatz*w.quote - w.einsatz)*(1-sf);
+    } else {
+      if(w.status==='gewonnen') g[w.anbieterId] = (g[w.anbieterId]||0) + w.einsatz*w.quote*(1-sf) - w.einsatz;
+      else g[w.anbieterId] = (g[w.anbieterId]||0) - w.einsatz;
+    }
+  });
+  return g;
+}
+
+function usedFbIds() {
+  return new Set(D.wetten.filter(w=>w.typ==='freebet'&&w.freebetId).map(w=>w.freebetId));
+}
+function availFb(aid) {
+  const used = usedFbIds();
+  return (D.anbieter.find(a=>a.id===aid)?.freebets||[]).filter(f=>!used.has(f.id));
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+function showTab(i) {
+  document.querySelectorAll('.page').forEach((p,j)=>p.classList.toggle('active',i===j));
+  document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',i===j));
+  if(i===0) renderOverview();
+  if(i===1) renderKonten();
+  if(i===2) renderWetten();
+  if(i===3) renderStats();
+}
+
+// ── TAB 0: ÜBERSICHT ─────────────────────────────────────────────────────────
+function renderOverview() {
+  const g = calcGuthaben();
+  const used = usedFbIds();
+
+  // --- Totals ---
+  const totalEin = D.transaktionen.filter(t=>t.art==='ein').reduce((s,t)=>s+t.betrag,0);
+  const totalAus = D.transaktionen.filter(t=>t.art==='aus').reduce((s,t)=>s+t.betrag,0);
+  const totalG   = Object.values(g).reduce((s,v)=>s+v,0);
+  const totalProfit = D.wetten.filter(w=>w.status!=='offen').reduce((s,w)=>{
+    const c=calcWette(w);
+    return s+(w.status==='gewonnen'?c.profit:(w.typ==='freebet'?0:-w.einsatz));
+  },0);
+  const offeneWetten = D.wetten.filter(w=>w.status==='offen');
+  const offeneEinsatz = offeneWetten.reduce((s,w)=>s+(w.typ==='freebet'?0:w.einsatz),0);
+  const totalW = D.wetten.length;
+  const gewW   = D.wetten.filter(w=>w.status==='gewonnen').length;
+  const verlW  = D.wetten.filter(w=>w.status==='verloren').length;
+  const doneW  = gewW+verlW;
+  const hitrate= doneW>0?(gewW/doneW*100).toFixed(1):null;
+
+  // Deltas - always show Tag, laufende Woche (Mo-heute), laufender Monat
+  const dTag  = calcDeltaRange(today(), today());
+  const dWoche= calcDeltaRange(getMondayStr(), today());
+  const dMonat= calcDeltaRange(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10), today());
+
+  function fmtD(v) {
+    if(Math.abs(v)<0.005) return '<span style="color:#475569">±0</span>';
+    return v>0
+      ? '<span style="color:#34d399;font-weight:700">▲ +'+Math.abs(v).toFixed(2).replace('.',',')+'€</span>'
+      : '<span style="color:#f87171;font-weight:700">▼ −'+Math.abs(v).toFixed(2).replace('.',',')+'€</span>';
+  }
+  function dRow(dT,dW,dM) {
+    return `<div style="display:flex;gap:10px;margin-top:5px;font-size:11px;flex-wrap:wrap">
+      <span style="color:#64748b">Heute: ${fmtD(dT)}</span>
+      <span style="color:#64748b">Wo: ${fmtD(dW)}</span>
+      <span style="color:#64748b">Mo: ${fmtD(dM)}</span>
+    </div>`;
+  }
+
+  // Total freebets available
+  const totalFbVal = D.anbieter.reduce((s,a)=>{
+    return s + (a.freebets||[]).filter(f=>!used.has(f.id)).reduce((ss,f)=>ss+f.betrag,0);
+  },0);
+  const totalFbCount = D.anbieter.reduce((s,a)=>(a.freebets||[]).filter(f=>!used.has(f.id)).length+s,0);
+
+  const wrap = document.getElementById('overviewContent');
+  wrap.innerHTML = `
+    <!-- Hero KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
+      <div style="background:linear-gradient(135deg,#064e3b,#1e293b);border:1px solid #34d399;border-radius:12px;padding:18px">
+        <div style="font-size:11px;color:#34d399;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Guthaben gesamt</div>
+        <div style="font-size:28px;font-weight:800;color:#34d399;font-variant-numeric:tabular-nums">${fmt(totalG)}</div>
+        ${dRow(dTag.dGuthaben, dWoche.dGuthaben, dMonat.dGuthaben)}
+      </div>
+      <div style="background:linear-gradient(135deg,#1e1b4b,#1e293b);border:1px solid #a78bfa;border-radius:12px;padding:18px">
+        <div style="font-size:11px;color:#a78bfa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Wetten-Profit</div>
+        <div style="font-size:28px;font-weight:800;color:${totalProfit>=0?'#a78bfa':'#f87171'};font-variant-numeric:tabular-nums">${fmt(totalProfit)}</div>
+        ${dRow(dTag.dProfit, dWoche.dProfit, dMonat.dProfit)}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;margin-bottom:20px">
+      <div style="background:linear-gradient(135deg,#0c2d4a,#1e293b);border:1px solid #60a5fa;border-radius:12px;padding:18px">
+        <div style="font-size:11px;color:#60a5fa;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Ein-/Auszahlungsbilanz</div>
+        <div style="font-size:28px;font-weight:800;color:${(totalAus-totalEin)>=0?'#34d399':'#f87171'};font-variant-numeric:tabular-nums">${(totalAus-totalEin)>=0?'+':''}${fmt(totalAus-totalEin)}</div>
+        ${dRow(dTag.dAus-dTag.dEin, dWoche.dAus-dWoche.dEin, dMonat.dAus-dMonat.dEin)}
+      </div>
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px">
+        <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Eingezahlt</div>
+        <div style="font-size:18px;font-weight:800;color:#f87171;font-variant-numeric:tabular-nums">${fmt(totalEin)}</div>
+      </div>
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:12px;padding:12px">
+        <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Ausgezahlt</div>
+        <div style="font-size:18px;font-weight:800;color:#60a5fa;font-variant-numeric:tabular-nums">${fmt(totalAus)}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+      <!-- Wetten Übersicht -->
+      <div class="card">
+        <div class="card-header">🎲 Wetten</div>
+        <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div style="font-size:11px;color:#64748b;margin-bottom:2px">Gesamt</div><div style="font-size:20px;font-weight:800">${totalW}</div></div>
+          <div><div style="font-size:11px;color:#64748b;margin-bottom:2px">Trefferquote</div><div style="font-size:20px;font-weight:800;color:${hitrate&&hitrate>50?'#34d399':'#f87171'}">${hitrate?hitrate+'%':'—'}</div></div>
+          <div><div style="font-size:11px;color:#34d399;margin-bottom:2px">Gewonnen</div><div style="font-size:20px;font-weight:800;color:#34d399">${gewW}</div></div>
+          <div><div style="font-size:11px;color:#f87171;margin-bottom:2px">Verloren</div><div style="font-size:20px;font-weight:800;color:#f87171">${verlW}</div></div>
+          ${offeneWetten.length>0?`<div style="grid-column:1/-1;background:#0f172a;border-radius:8px;padding:10px;margin-top:4px">
+            <div style="font-size:11px;color:#f59e0b;margin-bottom:4px">⏳ ${offeneWetten.length} offene Wette${offeneWetten.length>1?'n':''}</div>
+            ${offeneWetten.slice(0,3).map(w=>{
+              const a=D.anbieter.find(x=>x.id===w.anbieterId);
+              return `<div style="font-size:12px;color:#94a3b8;margin-bottom:2px">
+                <span style="color:#f1f5f9">${fmt(w.einsatz)}</span> @ <span style="color:#60a5fa">${w.quote.toFixed(2)}</span>
+                <span style="color:#64748b"> — ${esc(a?.name||'?')} · ${w.datum}</span>
+              </div>`;
+            }).join('')}
+            ${offeneWetten.length>3?`<div style="font-size:11px;color:#64748b;margin-top:2px">+${offeneWetten.length-3} weitere</div>`:''}
+          </div>`:''}
+        </div>
+      </div>
+
+      <!-- Anbieter Übersicht -->
+      <div class="card">
+        <div class="card-header">🏦 Anbieter
+          ${totalFbCount>0?`<span style="font-size:12px;color:#34d399;font-weight:400">🎁 ${totalFbCount} FB verfügbar</span>`:''}
+        </div>
+        <div style="padding:10px">
+          ${D.anbieter.length===0?'<div class="empty">Noch keine Anbieter</div>':
+            D.anbieter.map(a=>{
+              const gut=g[a.id]||0;
+              const avFb=availFb(a.id);
+              const pct = totalG>0 ? (gut/totalG*100) : 0;
+              return `<div style="display:flex;align-items:center;gap:10px;padding:7px 6px;border-bottom:1px solid #0f172a">
+                <span style="width:9px;height:9px;border-radius:50%;background:${a.farbe};flex-shrink:0"></span>
+                <span style="flex:1;font-weight:600;font-size:13px">${esc(a.name)}</span>
+                ${avFb.length>0?`<span style="font-size:11px;color:#34d399">🎁${avFb.length}</span>`:''}
+                <span style="font-weight:700;font-size:14px;color:${gut>=0?'#34d399':'#f87171'};font-variant-numeric:tabular-nums">${fmt(gut)}</span>
+              </div>
+              <div style="height:3px;background:#0f172a;margin:0 6px 4px">
+                <div style="height:100%;width:${Math.max(0,Math.min(100,pct)).toFixed(1)}%;background:${a.farbe};border-radius:2px"></div>
+              </div>`;
+            }).join('')
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Letzte Wetten -->
+    <div class="card">
+      <div class="card-header">🕒 Letzte Wetten
+        <button class="btn btn-ghost btn-sm" onclick="showTab(2)">Alle anzeigen →</button>
+      </div>
+      ${D.wetten.length===0?'<div class="empty">Noch keine Wetten</div>':`
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Datum</th><th>Anbieter</th><th>Typ</th><th>Einsatz</th><th>Quote</th><th>Profit</th><th>Status</th></tr></thead>
+        <tbody>${[...D.wetten].sort((a,b)=>b.datum.localeCompare(a.datum)).slice(0,5).map(w=>{
+          const a=D.anbieter.find(x=>x.id===w.anbieterId);
+          const c=calcWette(w);
+          const pDisp=w.status==='offen'?'—':w.status==='gewonnen'?'+'+fmt(c.profit):(w.typ==='freebet'?'—':'-'+fmt(w.einsatz));
+          const pCol=w.status==='offen'?'#64748b':w.status==='gewonnen'?'#34d399':'#f87171';
+          return `<tr>
+            <td style="color:#94a3b8">${w.datum}</td>
+            <td><span style="display:inline-flex;align-items:center;gap:5px">
+              <span style="width:7px;height:7px;border-radius:50%;background:${a?.farbe||'#64748b'};display:inline-block"></span>${esc(a?.name||'?')}
+            </span></td>
+            <td>${w.typ==='freebet'?'<span class="badge badge-green">🎁</span>':'<span class="badge badge-blue">💰</span>'}</td>
+            <td>${fmt(w.einsatz)}</td>
+            <td style="color:#60a5fa;font-weight:600">${w.quote.toFixed(2)}</td>
+            <td style="font-weight:700;color:${pCol}">${pDisp}</td>
+            <td><span class="badge ${w.status==='gewonnen'?'badge-green':w.status==='verloren'?'badge-red':'badge-gray'}">${cap(w.status)}</span></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`}
+    </div>
+  `;
+}
+
+// ── TAB 0: KONTEN ─────────────────────────────────────────────────────────────
+function renderKonten() {
+  const g = calcGuthaben();
+  const used = usedFbIds();
+  const grid = document.getElementById('anbieterGrid');
+  grid.innerHTML = '';
+
+  D.anbieter.forEach(a => {
+    const avFb = availFb(a.id);
+    const fbTotal = avFb.reduce((s,f)=>s+f.betrag,0);
+    const isSelected = selAnbieter===a.id;
+    const card = document.createElement('div');
+    card.className = 'anbieter-card' + (isSelected?' selected':'');
+    card.style.setProperty('--farbe', a.farbe);
+    if(isSelected) card.style.borderColor = a.farbe;
+    card.onclick = () => { selAnbieter = selAnbieter===a.id?null:a.id; renderKonten(); };
+    const gut = g[a.id]||0;
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <span style="width:9px;height:9px;border-radius:50%;background:${a.farbe};display:inline-block"></span>
+        <b style="font-size:14px">${esc(a.name)}</b>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:1px">Guthaben</div>
+      <div style="font-size:20px;font-weight:800;color:${gut>=0?'#34d399':'#f87171'};font-variant-numeric:tabular-nums;margin-bottom:8px">${fmt(gut)}</div>
+      ${avFb.length>0?`<div class="fb-tag">🎁 ${avFb.length} Freebet${avFb.length>1?'s':''} · ${fmt(fbTotal)}</div>`:''}
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openTxModal(null,'${a.id}')">+ Buchung</button>
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openFbModal('${a.id}')">🎁 FB</button>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openAnbieterModal('${a.id}')">✎</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();delAnbieter('${a.id}')">✕</button>
+      </div>
+      ${(a.freebets||[]).length>0?`
+        <div style="margin-top:10px;border-top:1px solid #334155;padding-top:8px">
+          <div style="font-size:11px;color:#64748b;margin-bottom:5px">Freebets</div>
+          ${(a.freebets||[]).map(f=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;opacity:${used.has(f.id)?0.4:1}">
+              <span style="font-size:12px;color:${used.has(f.id)?'#64748b':'#34d399'}">${fmt(f.betrag)}${used.has(f.id)?' (verbraucht)':''}</span>
+              ${!used.has(f.id)?`<div style="display:flex;gap:3px">
+                <button class="btn btn-ghost btn-sm" style="padding:2px 6px" onclick="event.stopPropagation();openFbModal('${a.id}','${f.id}')">✎</button>
+                <button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="event.stopPropagation();delFb('${a.id}','${f.id}')">✕</button>
+              </div>`:''}
+            </div>`).join('')}
+        </div>`:''}
+    `;
+    grid.appendChild(card);
+  });
+
+  // Add card
+  const add = document.createElement('div');
+  add.className = 'anbieter-card add-card';
+  add.innerHTML = '<span style="font-size:26px">+</span><span style="font-size:12px">Anbieter</span>';
+  add.onclick = () => openAnbieterModal();
+  grid.appendChild(add);
+
+  // KPIs
+  const txs = selAnbieter ? D.transaktionen.filter(t=>t.anbieterId===selAnbieter) : D.transaktionen;
+  const ein = txs.filter(t=>t.art==='ein').reduce((s,t)=>s+t.betrag,0);
+  const aus = txs.filter(t=>t.art==='aus').reduce((s,t)=>s+t.betrag,0);
+  const kpis = document.getElementById('txKpis');
+  if(D.anbieter.length>0) {
+    kpis.style.display='flex';
+    kpis.innerHTML = kpiHtml([
+      {l:'Eingezahlt',v:fmt(ein),c:'#34d399'},
+      {l:'Ausgezahlt',v:fmt(aus),c:'#60a5fa'},
+      {l:'Saldo',v:fmt(ein-aus),c:ein-aus>=0?'#34d399':'#f87171'},
+    ]);
+  } else kpis.style.display='none';
+
+  document.getElementById('filterOffBtn').style.display = selAnbieter?'inline-flex':'none';
+  document.getElementById('txTitle').textContent = 'Transaktionen' + (selAnbieter ? ` — ${D.anbieter.find(a=>a.id===selAnbieter)?.name||''}` : '');
+  document.getElementById('addTxBtn').disabled = D.anbieter.length===0;
+
+  // Table
+  const sorted = [...txs].sort((a,b)=>b.datum.localeCompare(a.datum));
+  const wrap = document.getElementById('txTableWrap');
+  if(!sorted.length) { wrap.innerHTML='<div class="empty">Noch keine Transaktionen</div>'; return; }
+  wrap.innerHTML = `<div style="overflow-x:auto"><table>
+    <thead><tr><th>Datum</th><th>Anbieter</th><th>Art</th><th>Betrag</th><th>Notiz</th><th></th></tr></thead>
+    <tbody>${sorted.map(t=>{
+      const a=D.anbieter.find(x=>x.id===t.anbieterId);
+      return `<tr>
+        <td style="color:#94a3b8">${t.datum}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${a?.farbe||'#64748b'};display:inline-block"></span>${esc(a?.name||'?')}</span></td>
+        <td><span class="badge ${t.art==='ein'?'badge-green':'badge-blue'}">${t.art==='ein'?'Einzahlung':'Auszahlung'}</span></td>
+        <td style="font-weight:700;color:${t.art==='ein'?'#34d399':'#60a5fa'};font-variant-numeric:tabular-nums">${t.art==='ein'?'+':'-'}${fmt(t.betrag)}</td>
+        <td style="color:#94a3b8;max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(t.notiz||'—')}</td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-sm" onclick="openTxModal('${t.id}')">✎</button>
+          <button class="btn btn-danger btn-sm" onclick="delTx('${t.id}')">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+function clearFilter() { selAnbieter=null; renderKonten(); }
+
+// ── Anbieter Modal ────────────────────────────────────────────────────────────
+function openAnbieterModal(id=null) {
+  editAnbieterId = id;
+  const a = id ? D.anbieter.find(x=>x.id===id) : null;
+  document.getElementById('modalAnbieterTitle').textContent = a?'Anbieter bearbeiten':'Neuer Anbieter';
+  document.getElementById('aName').value = a?.name||'';
+  curFarbe = a?.farbe||FARBEN[D.anbieter.length%FARBEN.length];
+  renderFarbPicker();
+  openModal('modalAnbieter');
+}
+function renderFarbPicker() {
+  document.getElementById('farbPicker').innerHTML = FARBEN.map(f=>
+    `<div onclick="setCurFarbe('${f}')" style="width:26px;height:26px;border-radius:50%;background:${f};cursor:pointer;box-shadow:${curFarbe===f?'0 0 0 3px #fff,0 0 0 5px '+f:'none'};transition:box-shadow .15s"></div>`
+  ).join('');
+}
+function setCurFarbe(f) { curFarbe=f; renderFarbPicker(); }
+function saveAnbieter() {
+  const name = document.getElementById('aName').value.trim();
+  if(!name) return;
+  if(editAnbieterId) {
+    D.anbieter = D.anbieter.map(a=>a.id===editAnbieterId?{...a,name,farbe:curFarbe}:a);
+  } else {
+    D.anbieter.push({id:uid(),name,farbe:curFarbe,freebets:[]});
+  }
+  save(); closeModal('modalAnbieter'); renderKonten();
+}
+function delAnbieter(id) {
+  const a=D.anbieter.find(x=>x.id===id);
+  confirmDelete("Anbieter löschen?", a?`"${a.name}" — Buchungen und Wetten bleiben erhalten`:"", ()=>{
+    D.anbieter=D.anbieter.filter(x=>x.id!==id);
+    if(selAnbieter===id) selAnbieter=null;
+    save(); renderKonten();
+  });
+}
+
+// ── Tx Modal ──────────────────────────────────────────────────────────────────
+function openTxModal(id=null, anbieterId=null) {
+  editTxId = id;
+  const t = id ? D.transaktionen.find(x=>x.id===id) : null;
+  document.getElementById('modalTxTitle').textContent = t?'Buchung bearbeiten':'Neue Buchung';
+  const sel = document.getElementById('txAnbieter');
+  sel.innerHTML = D.anbieter.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  sel.value = t?.anbieterId||anbieterId||D.anbieter[0]?.id||'';
+  document.getElementById('txArt').value = t?.art||'ein';
+  document.getElementById('txBetrag').value = t?.betrag||'';
+  document.getElementById('txDatum').value = t?.datum||today();
+  document.getElementById('txNotiz').value = t?.notiz||'';
+  openModal('modalTx');
+}
+function saveTx() {
+  const aid = document.getElementById('txAnbieter').value;
+  const art = document.getElementById('txArt').value;
+  const betrag = parseFloat(document.getElementById('txBetrag').value);
+  const datum = document.getElementById('txDatum').value;
+  const notiz = document.getElementById('txNotiz').value;
+  if(!aid||isNaN(betrag)||betrag<=0) return;
+  if(art==='aus') {
+    const g = calcGuthaben();
+    let verfuegbar = g[aid]||0;
+    if(editTxId) {
+      const alt = D.transaktionen.find(x=>x.id===editTxId);
+      if(alt && alt.anbieterId===aid) verfuegbar += (alt.art==='aus'?alt.betrag:-alt.betrag);
+    }
+    if(betrag>verfuegbar) {
+      alert(`Nicht genug Guthaben bei diesem Anbieter. Verfügbar: ${fmt(verfuegbar)}`);
+      return;
+    }
+  }
+  const e = {id:editTxId||uid(),anbieterId:aid,art,betrag,datum,notiz};
+  if(editTxId) D.transaktionen = D.transaktionen.map(t=>t.id===editTxId?e:t);
+  else D.transaktionen.push(e);
+  save(); closeModal('modalTx'); renderKonten();
+}
+function delTx(id) { const t=D.transaktionen.find(x=>x.id===id); confirmDelete("Buchung löschen?", t?`${t.art==="ein"?"Einzahlung":"Auszahlung"} ${fmt(t.betrag)} am ${t.datum}`:"", ()=>{ D.transaktionen=D.transaktionen.filter(x=>x.id!==id); save(); renderKonten(); }); }
+
+// ── Freebet Modal ─────────────────────────────────────────────────────────────
+function openFbModal(aid, fbId=null) {
+  editFbData = {aid, fbId};
+  const fb = fbId ? (D.anbieter.find(a=>a.id===aid)?.freebets||[]).find(f=>f.id===fbId) : null;
+  document.getElementById('fbBetrag').value = fb?.betrag||'';
+  document.getElementById('fbAblauf').value = fb?.ablauf||'';
+  document.getElementById('fbNotiz').value = fb?.notiz||'';
+  openModal('modalFb');
+}
+function saveFb() {
+  const betrag = parseFloat(document.getElementById('fbBetrag').value);
+  if(isNaN(betrag)||betrag<=0) return;
+  const ablauf = document.getElementById('fbAblauf').value;
+  const notiz = document.getElementById('fbNotiz').value;
+  const entry = {id:editFbData.fbId||uid(),betrag,ablauf,notiz,erstellt:today()};
+  D.anbieter = D.anbieter.map(a=>{
+    if(a.id!==editFbData.aid) return a;
+    const fbs = a.freebets||[];
+    return {...a, freebets: editFbData.fbId ? fbs.map(f=>f.id===editFbData.fbId?entry:f) : [...fbs,entry]};
+  });
+  save(); closeModal('modalFb'); renderKonten();
+}
+function delFb(aid, fbId) { confirmDelete("Freebet löschen?","", ()=>{ D.anbieter=D.anbieter.map(a=>a.id!==aid?a:{...a,freebets:(a.freebets||[]).filter(f=>f.id!==fbId)}); save(); renderKonten(); }); }
+
+// ── TAB 1: WETTEN ─────────────────────────────────────────────────────────────
+function calcWette(w) {
+  const sf = w.steuer ? 0.05 : 0;
+  if(w.typ==='freebet') {
+    const n = w.einsatz*w.quote - w.einsatz;
+    return {auszahlung: n*(1-sf), profit: n*(1-sf)};
+  }
+  const brutto = w.einsatz*w.quote;
+  return {auszahlung: brutto*(1-sf), profit: brutto*(1-sf)-w.einsatz};
+}
+
+function renderWetten() {
+  const g = calcGuthaben();
+  // Stats
+  const total=D.wetten.length, gew=D.wetten.filter(w=>w.status==='gewonnen').length,
+    verl=D.wetten.filter(w=>w.status==='verloren').length, off=D.wetten.filter(w=>w.status==='offen').length;
+  const profit = D.wetten.filter(w=>w.status!=='offen').reduce((s,w)=>{
+    const c=calcWette(w);
+    return s+(w.status==='gewonnen'?c.profit:(w.typ==='freebet'?0:-w.einsatz));
+  },0);
+  const done = total-off;
+  const hr = done>0?(gew/done*100).toFixed(1):null;
+  document.getElementById('wettenKpis').innerHTML = kpiHtml([
+    {l:'Gesamt',v:total,c:'#f1f5f9'},
+    {l:'Gewonnen',v:gew,c:'#34d399'},
+    {l:'Verloren',v:verl,c:'#f87171'},
+    {l:'Offen',v:off,c:'#94a3b8'},
+    {l:'Trefferquote',v:hr?hr+'%':'—',c:hr&&hr>50?'#34d399':'#f87171'},
+    {l:'Profit',v:fmt(profit),c:profit>=0?'#34d399':'#f87171'},
+  ]);
+  document.getElementById('addWetteBtn').disabled = D.anbieter.length===0;
+
+  const filtered = D.wetten.filter(w=>wettenFilter==='alle'||w.status===wettenFilter)
+    .sort((a,b)=>b.datum.localeCompare(a.datum));
+
+  const wrap = document.getElementById('wettenTableWrap');
+  if(!filtered.length) { wrap.innerHTML='<div class="empty">'+(D.anbieter.length===0?'Zuerst einen Anbieter anlegen':'Keine Wetten gefunden')+'</div>'; return; }
+
+  wrap.innerHTML = `<div style="overflow-x:auto"><table>
+    <thead><tr><th>Datum</th><th>Anbieter</th><th>Typ</th><th>Einsatz</th><th>Quote</th><th>Pot. Auszahlung</th><th>Profit</th><th>St.</th><th>Status</th><th></th></tr></thead>
+    <tbody>${filtered.map(w=>{
+      const a=D.anbieter.find(x=>x.id===w.anbieterId);
+      const c=calcWette(w);
+      const profitDisp = w.status==='offen'?'—':w.status==='gewonnen'?'+'+fmt(c.profit):(w.typ==='freebet'?'—':'-'+fmt(w.einsatz));
+      const profitCol = w.status==='offen'?'#64748b':w.status==='gewonnen'?'#34d399':'#f87171';
+      const actions = w.status==='offen'
+        ? `<button class="btn btn-primary btn-sm" data-action="gewonnen" data-id="${w.id}">✓ Gewonnen</button>
+           <button class="btn btn-danger btn-sm" data-action="verloren" data-id="${w.id}">✕ Verloren</button>`
+        : `<button class="btn btn-ghost btn-sm" data-action="offen" data-id="${w.id}">↩</button>`;
+      return `<tr>
+        <td style="color:#94a3b8">${w.datum}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${a?.farbe||'#64748b'};display:inline-block"></span>${esc(a?.name||'?')}</span></td>
+        <td>${w.typ==='freebet'?'<span class="badge badge-green">🎁 Freebet</span>':'<span class="badge badge-blue">💰 Echtgeld</span>'}</td>
+        <td style="font-variant-numeric:tabular-nums">${fmt(w.einsatz)}</td>
+        <td style="color:#60a5fa;font-weight:600">${w.quote.toFixed(2)}</td>
+        <td style="color:#a78bfa;font-variant-numeric:tabular-nums">${fmt(c.auszahlung)}</td>
+        <td style="font-weight:700;color:${profitCol};font-variant-numeric:tabular-nums">${profitDisp}</td>
+        <td style="font-size:11px;color:${w.steuer?'#f59e0b':'#64748b'}">${w.steuer?'5%':'—'}</td>
+        <td><span class="badge ${w.status==='gewonnen'?'badge-green':w.status==='verloren'?'badge-red':'badge-gray'}">${cap(w.status)}</span></td>
+        <td><div style="display:flex;gap:4px;align-items:center">
+          ${actions}
+          <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${w.id}">✎</button>
+          <button class="btn btn-danger btn-sm" data-action="del" data-id="${w.id}">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+
+  // Event delegation — one listener on the table, no inline onclick
+  wrap.querySelector('table').addEventListener('click', function(e) {
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+    if(action==='del') { delWette(id); }
+    else if(action==='edit') { openWetteModal(id); }
+    else { setWetteStatus(id, action); }
+  });
+}
+
+function setWettenFilter(s) {
+  wettenFilter=s;
+  document.querySelectorAll('.filter-status').forEach(b=>b.classList.toggle('active',b.dataset.s===s));
+  renderWetten();
+}
+function setWetteStatus(id, status) {
+  D.wetten = D.wetten.map(w=>w.id===id?{...w,status}:w);
+  save(); renderWetten();
+}
+function delWette(id) { const w=D.wetten.find(x=>x.id===id); confirmDelete("Wette löschen?", w?`Einsatz ${fmt(w.einsatz)} @ ${w.quote?.toFixed(2)} (${cap(w.status||"")})`:"", ()=>{ D.wetten=D.wetten.filter(x=>x.id!==id); save(); renderWetten(); }); }
+
+// ── Wette Modal ───────────────────────────────────────────────────────────────
+function openWetteModal(id=null) {
+  editWetteId=id;
+  const w = id ? D.wetten.find(x=>x.id===id) : null;
+  document.getElementById('modalWetteTitle').textContent = w?'Wette bearbeiten':'Neue Wette';
+
+  const sel = document.getElementById('wAnbieter');
+  const g = calcGuthaben();
+  sel.innerHTML = D.anbieter.map(a=>`<option value="${a.id}">${esc(a.name)} (${fmt(g[a.id]||0)})</option>`).join('');
+  sel.value = w?.anbieterId||D.anbieter[0]?.id||'';
+
+  wSteuer = w?.steuer||false;
+  updateSteuerUI();
+
+  wTyp = w?.typ||'echtgeld';
+  document.getElementById('wEinsatz').value = w?.einsatz||'';
+  document.getElementById('wEinsatz').readOnly = false;
+  document.getElementById('wQuote').value = w?.quote||'';
+  document.getElementById('wDatum').value = w?.datum||today();
+  document.getElementById('wNotiz').value = w?.notiz||'';
+
+  updateFbUI(w?.freebetId);
+  setTypUI(wTyp);
+  updatePreview();
+  openModal('modalWette');
+}
+
+function onWAnbieterChange() { updateFbUI(); setTypUI(wTyp); updatePreview(); }
+
+function setTyp(typ) {
+  wTyp=typ;
+  if(typ==='freebet') {
+    const aid=document.getElementById('wAnbieter').value;
+    const fbs=availFb(aid);
+    if(!fbs.length) { wTyp='echtgeld'; return; }
+    document.getElementById('wFreebetId').value=fbs[0].id;
+    document.getElementById('wEinsatz').value=fbs[0].betrag;
+    document.getElementById('wEinsatz').readOnly=true;
+  } else {
+    document.getElementById('wEinsatz').value='';
+    document.getElementById('wEinsatz').readOnly=false;
+  }
+  setTypUI(typ);
+  updatePreview();
+}
+
+function setTypUI(typ) {
+  document.getElementById('typEcht').classList.toggle('active',typ==='echtgeld');
+  document.getElementById('typFb').classList.toggle('active',typ==='freebet');
+  const aid=document.getElementById('wAnbieter').value;
+  const hasFb=availFb(aid).length>0;
+  document.getElementById('typFb').disabled=!hasFb;
+  document.getElementById('typFb').textContent='🎁 Freebet'+(hasFb?' ('+availFb(aid).length+')':' (keine)');
+  document.getElementById('fbSelectWrap').style.display=typ==='freebet'?'block':'none';
+  document.getElementById('einsatzLabel').textContent=typ==='freebet'?'Freebet-Einsatz (€)':'Einsatz (€)';
+}
+
+function updateFbUI(selFbId=null) {
+  const aid=document.getElementById('wAnbieter').value;
+  const fbs=availFb(aid);
+  const fbSel=document.getElementById('wFreebetId');
+  fbSel.innerHTML=fbs.map(f=>`<option value="${f.id}">${fmt(f.betrag)}${f.notiz?' — '+esc(f.notiz):''}${f.ablauf?' (bis '+f.ablauf+')':''}</option>`).join('');
+  if(selFbId) fbSel.value=selFbId;
+}
+
+function onFbSelect() {
+  const fbId=document.getElementById('wFreebetId').value;
+  const aid=document.getElementById('wAnbieter').value;
+  const fb=(D.anbieter.find(a=>a.id===aid)?.freebets||[]).find(f=>f.id===fbId);
+  if(fb) { document.getElementById('wEinsatz').value=fb.betrag; updatePreview(); }
+}
+
+function toggleSteuer() { wSteuer=!wSteuer; updateSteuerUI(); updatePreview(); }
+function updateSteuerUI() {
+  document.getElementById('steuerToggle').style.background=wSteuer?'#f59e0b':'#334155';
+  document.getElementById('steuerKnob').style.left=wSteuer?'22px':'3px';
+  document.getElementById('steuerLabel').textContent=wSteuer?'AN':'AUS';
+  document.getElementById('steuerLabel').style.color=wSteuer?'#f59e0b':'#64748b';
+}
+
+function updatePreview() {
+  const e=parseFloat(document.getElementById('wEinsatz').value)||0;
+  const q=parseFloat(document.getElementById('wQuote').value)||0;
+  const prev=document.getElementById('wPreview');
+  if(e<=0||q<=1) { prev.style.display='none'; return; }
+  prev.style.display='block';
+  const sf=wSteuer?0.05:0;
+  if(wTyp==='freebet') {
+    const netto=(e*q-e)*(1-sf);
+    prev.innerHTML=`<div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vorschau</div>
+      <div>Nettogewinn bei Gewinn: <b style="color:#34d399">${fmt(netto)}</b></div>
+      ${sf>0?`<div style="color:#f59e0b;font-size:12px">inkl. 5% Wettsteuer abgezogen</div>`:''}
+      <div style="color:#64748b;font-size:12px;margin-top:3px">Bei Verlust: kein Verlust (Freebet)</div>`;
+  } else {
+    const brutto=e*q;
+    const netto=brutto*(1-sf);
+    prev.innerHTML=`<div style="color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Vorschau</div>
+      <div>Bruttoauszahlung: <b style="color:#a78bfa">${fmt(brutto)}</b></div>
+      ${sf>0?`<div style="color:#f59e0b">− 5% Steuer: −${fmt(brutto*sf)}</div>`:''}
+      <div>Nettoauszahlung: <b style="color:#34d399">${fmt(netto)}</b></div>
+      <div style="color:${netto-e>=0?'#34d399':'#f87171'}">Profit: ${netto-e>=0?'+':''}${fmt(netto-e)}</div>`;
+  }
+}
+
+function saveWette() {
+  const aid=document.getElementById('wAnbieter').value;
+  const e=parseFloat(document.getElementById('wEinsatz').value);
+  const q=parseFloat(document.getElementById('wQuote').value);
+  const fbId=document.getElementById('wFreebetId').value;
+  if(!aid||isNaN(e)||e<=0||isNaN(q)||q<=1) return;
+  if(wTyp==='freebet'&&!fbId) return;
+  if(wTyp==='echtgeld') {
+    const g = calcGuthaben();
+    let verfuegbar = g[aid]||0;
+    if(editWetteId) {
+      const alt = D.wetten.find(w=>w.id===editWetteId);
+      if(alt && alt.anbieterId===aid && alt.typ==='echtgeld' && alt.status==='offen') verfuegbar += alt.einsatz;
+    }
+    if(e>verfuegbar) {
+      alert(`Nicht genug Guthaben bei diesem Anbieter. Verfügbar: ${fmt(verfuegbar)}`);
+      return;
+    }
+  }
+  const entry={
+    id:editWetteId||uid(), anbieterId:aid, typ:wTyp,
+    freebetId:wTyp==='freebet'?fbId:null,
+    einsatz:e, quote:q, steuer:wSteuer,
+    datum:document.getElementById('wDatum').value,
+    notiz:document.getElementById('wNotiz').value,
+    status:editWetteId?(D.wetten.find(w=>w.id===editWetteId)?.status||'offen'):'offen'
+  };
+  if(editWetteId) D.wetten=D.wetten.map(w=>w.id===editWetteId?entry:w);
+  else D.wetten.push(entry);
+  save(); closeModal('modalWette'); renderWetten();
+}
+
+// ── TAB 2: STATISTIKEN ────────────────────────────────────────────────────────
+// ── TAB 2: STATISTIKEN ─────────────────────────────────────────────────────
+let curStatTab = 0; // 0=wetten, 1=einaus, 2=gesamt
+let navOffset = 0;  // for day/week navigation
+
+function setStatTab(i) {
+  curStatTab = i;
+  navOffset = 0;
+  document.querySelectorAll('.stat-tab-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.st)===i));
+  renderStats();
+}
+
+function navPrev() { navOffset--; renderStats(); }
+function navNext() { if(navOffset<0) { navOffset++; renderStats(); } }
+function navToday() { navOffset=0; renderStats(); }
+
+function confirmDelete(title, text, onConfirm) {
+  document.getElementById('confirmTitle').textContent = title || 'Wirklich löschen?';
+  document.getElementById('confirmText').textContent = text || 'Diese Aktion kann nicht rückgängig gemacht werden.';
+  const btn = document.getElementById('confirmOkBtn');
+  const newBtn = btn.cloneNode(true); // remove old listeners
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', () => { closeModal('modalConfirm'); onConfirm(); });
+  openModal('modalConfirm');
+}
+
+function calcDelta(cutoffDate) {
+  return calcDeltaRange(cutoffDate, today());
+}
+function calcDeltaRange(from, to) {
+  const txIn = D.transaktionen.filter(t=>t.datum>=from&&t.datum<=to);
+  const dEin = txIn.filter(t=>t.art==='ein').reduce((s,t)=>s+t.betrag,0);
+  const dAus = txIn.filter(t=>t.art==='aus').reduce((s,t)=>s+t.betrag,0);
+  const dProfit = D.wetten.filter(w=>w.status!=='offen'&&w.datum>=from&&w.datum<=to).reduce((s,w)=>{
+    const c=calcWette(w);
+    return s+(w.status==='gewonnen'?c.profit:(w.typ==='freebet'?0:-w.einsatz));
+  },0);
+  const dGuthaben = dEin - dAus + dProfit;
+  return {dEin, dAus, dProfit, dGuthaben};
+}
+
+function fmtDelta(v) {
+  if(Math.abs(v)<0.005) return '';
+  return (v>0?'<span style="color:#34d399;font-size:11px;font-weight:600">▲ +'+Math.abs(v).toFixed(2).replace('.',',')+'€</span>'
+             :'<span style="color:#f87171;font-size:11px;font-weight:600">▼ −'+Math.abs(v).toFixed(2).replace('.',',')+'€</span>');
+}
+
+function addDaysStr(n) {
+  const d=new Date(); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10);
+}
+function getMondayStr() {
+  const now=new Date(), day=now.getDay();
+  const m=new Date(now); m.setDate(now.getDate()-(day===0?6:day-1)); m.setHours(0,0,0,0);
+  return m.toISOString().slice(0,10);
+}
+
+function renderStats() {
+  const g = calcGuthaben();
+  const totalEin=D.transaktionen.filter(t=>t.art==='ein').reduce((s,t)=>s+t.betrag,0);
+  const totalAus=D.transaktionen.filter(t=>t.art==='aus').reduce((s,t)=>s+t.betrag,0);
+  const totalG=Object.values(g).reduce((s,v)=>s+v,0); // aktuelles Guthaben bei allen Anbietern
+  const totalProfit=D.wetten.filter(w=>w.status!=='offen').reduce((s,w)=>{
+    const c=calcWette(w);
+    return s+(w.status==='gewonnen'?c.profit:(w.typ==='freebet'?0:-w.einsatz));
+  },0);
+
+  // Delta for currently viewed period
+  const {start: navStart, end: navEnd} = getNavRange();
+  const navStartStr = navStart.toISOString().slice(0,10);
+  const navEndStr = navEnd.toISOString().slice(0,10);
+  const dPeriod = calcDeltaRange(navStartStr, navEndStr);
+  const periodLabel = getNavLabel(navStart, navEnd);
+
+  function deltaRow(dEin, dAus, dProfit, dGut) {
+    const periodLine = `<div style="margin-top:4px;font-size:11px;color:#64748b">${periodLabel}:
+      <span style="margin-left:4px">${fmtDelta(dGut)||'±0'}</span></div>`;
+    return periodLine;
+  }
+
+  document.getElementById('statsKpis').innerHTML = `
+    <div class="kpi">
+      <div class="kpi-label">Eingezahlt gesamt</div>
+      <div class="kpi-value" style="color:#f87171">${fmt(totalEin)}</div>
+      <div style="margin-top:3px;font-size:11px;color:#64748b">${periodLabel}: ${dPeriod.dEin>0?'<span style="color:#f87171">+'+dPeriod.dEin.toFixed(2).replace('.',',')+'€</span>':'—'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Ausgezahlt gesamt</div>
+      <div class="kpi-value" style="color:#34d399">${fmt(totalAus)}</div>
+      <div style="margin-top:3px;font-size:11px;color:#64748b">${periodLabel}: ${dPeriod.dAus>0?'<span style="color:#34d399">+'+dPeriod.dAus.toFixed(2).replace('.',',')+'€</span>':'—'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Guthaben (Anbieter)</div>
+      <div class="kpi-value" style="color:#60a5fa">${fmt(totalG)}</div>
+      <div style="margin-top:3px;font-size:11px;color:#64748b">${periodLabel}: ${fmtDelta(dPeriod.dGuthaben)||'—'}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Wetten-Profit</div>
+      <div class="kpi-value" style="color:${totalProfit>=0?'#34d399':'#f87171'}">${fmt(totalProfit)}</div>
+      <div style="margin-top:3px;font-size:11px;color:#64748b">${periodLabel}: ${fmtDelta(dPeriod.dProfit)||'—'}</div>
+    </div>
+  `;
+
+  // Horizon buttons
+  document.getElementById('horizonStrip').innerHTML=HORIZONS.map(h=>
+    `<button class="hz-btn ${h===curHorizon?'active':''}" onclick="setHorizon('${h}')">${h}</button>`
+  ).join('');
+
+  // Nav strip: always shown
+  const {start, end} = getNavRange();
+  const navStrip = document.getElementById('navStrip');
+  navStrip.style.display = 'flex';
+  document.getElementById('navLabel').textContent = getNavLabel(start, end);
+  // Disable next if already at current period (navOffset >= 0)
+  const nextBtn = navStrip.querySelectorAll('button')[1];
+  nextBtn.disabled = navOffset >= 0;
+  nextBtn.style.opacity = navOffset >= 0 ? '.4' : '1';
+
+  buildCharts();
+}
+
+function getNavRange() {
+  const now = new Date();
+  now.setHours(12,0,0,0);
+
+  if(curHorizon==='Tag') {
+    const start = new Date(now);
+    start.setDate(start.getDate() + navOffset);
+    start.setHours(0,0,0,0);
+    const end = new Date(start);
+    end.setHours(23,59,59,999);
+    return {start, end};
+  }
+  if(curHorizon==='Woche') {
+    const day = now.getDay();
+    const mondayThis = new Date(now);
+    mondayThis.setDate(now.getDate() - (day===0?6:day-1));
+    mondayThis.setHours(0,0,0,0);
+    const start = new Date(mondayThis);
+    start.setDate(mondayThis.getDate() + navOffset*7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23,59,59,999);
+    return {start, end};
+  }
+  if(curHorizon==='Monat') {
+    // calendar month: Jan, Feb, ...
+    const d = new Date(now.getFullYear(), now.getMonth() + navOffset, 1);
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    start.setHours(0,0,0,0);
+    const end = new Date(d.getFullYear(), d.getMonth()+1, 0);
+    end.setHours(23,59,59,999);
+    return {start, end};
+  }
+  if(curHorizon==='3M') {
+    // quarters: Jan-Mar, Apr-Jun, Jul-Sep, Oct-Dec
+    const qStart = Math.floor(now.getMonth()/3)*3 + navOffset*3;
+    const year = now.getFullYear() + Math.floor(qStart/12);
+    const month = ((qStart % 12) + 12) % 12;
+    const start = new Date(year, month, 1);
+    start.setHours(0,0,0,0);
+    const end = new Date(year, month+3, 0);
+    end.setHours(23,59,59,999);
+    return {start, end};
+  }
+  if(curHorizon==='6M') {
+    // half-years: Jan-Jun, Jul-Dec
+    const hStart = Math.floor(now.getMonth()/6)*6 + navOffset*6;
+    const year = now.getFullYear() + Math.floor(hStart/12);
+    const month = ((hStart % 12) + 12) % 12;
+    const start = new Date(year, month, 1);
+    start.setHours(0,0,0,0);
+    const end = new Date(year, month+6, 0);
+    end.setHours(23,59,59,999);
+    return {start, end};
+  }
+  // Jahr
+  const year = now.getFullYear() + navOffset;
+  const start = new Date(year, 0, 1);
+  start.setHours(0,0,0,0);
+  const end = new Date(year, 11, 31);
+  end.setHours(23,59,59,999);
+  return {start, end};
+}
+
+function getNavLabel(start, end) {
+  const opts = {day:'numeric', month:'short'};
+  const optsY = {day:'numeric', month:'short', year:'numeric'};
+  if(curHorizon==='Tag') return start.toLocaleDateString('de-DE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  if(curHorizon==='Woche') return start.toLocaleDateString('de-DE',opts)+' – '+end.toLocaleDateString('de-DE',optsY);
+  if(curHorizon==='Monat') return start.toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+  if(curHorizon==='3M') return start.toLocaleDateString('de-DE',{month:'short',year:'numeric'})+' – '+end.toLocaleDateString('de-DE',{month:'short',year:'numeric'});
+  if(curHorizon==='6M') return start.toLocaleDateString('de-DE',{month:'short',year:'numeric'})+' – '+end.toLocaleDateString('de-DE',{month:'short',year:'numeric'});
+  return String(start.getFullYear());
+}
+
+function setHorizon(h) { curHorizon=h; navOffset=0; renderStats(); }
+
+function buildChartData() {
+  const {start: cutoffDate, end: endDate} = getNavRange();
+  const cutoff = cutoffDate.toISOString().slice(0,10);
+  // cap end to today so we never show future days in current period
+  const todayStr = today();
+  const rawEnd = endDate.toISOString().slice(0,10);
+  const endStr = rawEnd > todayStr ? todayStr : rawEnd;
+
+  // Build cumulative baseline before cutoff
+  const allEvents=[];
+  D.transaktionen.forEach(t=>allEvents.push({datum:t.datum,type:'tx',data:t}));
+  D.wetten.filter(w=>w.status!=='offen').forEach(w=>allEvents.push({datum:w.datum,type:'wette',data:w}));
+  allEvents.sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  let cumTx=0, cumW=0;
+  allEvents.filter(e=>e.datum<cutoff).forEach(e=>{
+    if(e.type==='tx') {
+      // Einzahlung = Geld WEG aus Tasche (negativ), Auszahlung = Geld zurück (positiv)
+      cumTx += e.data.art==='ein' ? -e.data.betrag : e.data.betrag;
+    } else {
+      const c=calcWette(e.data);
+      cumW += e.data.status==='gewonnen' ? c.profit : (e.data.typ==='freebet' ? 0 : -e.data.einsatz);
+    }
+  });
+
+  // Events in range
+  const byDay={};
+  allEvents.filter(e=>e.datum>=cutoff&&e.datum<=endStr).forEach(e=>{
+    if(!byDay[e.datum]) byDay[e.datum]=[];
+    byDay[e.datum].push(e);
+  });
+
+  // Generate all days in range for stepped look
+  const days=[];
+  const cur=new Date(cutoffDate);
+  while(cur.toISOString().slice(0,10)<=endStr) {
+    days.push(cur.toISOString().slice(0,10));
+    cur.setDate(cur.getDate()+1);
+  }
+  if(!days.includes(endStr)) days.push(endStr);
+
+  // Build stepped data — chart shows change WITHIN this period only (starts at 0)
+  // baseTx/baseW = values at start of period; subtract to get delta
+  const baseTx = cumTx, baseW = cumW;
+  const result=[];
+  let rTx=cumTx, rW=cumW;
+
+  // Starting point — always 0 for the period
+  result.push({datum:cutoff, label:fmtLabel(cutoff), einAus:rTx-baseTx, wetten:rW-baseW, gesamt:(-rTx+rW)-(-baseTx+baseW)});
+
+  days.forEach(d=>{
+    if(d===cutoff) return;
+    if(byDay[d]) {
+      byDay[d].forEach(e=>{
+        if(e.type==='tx') {
+          rTx += e.data.art==='ein' ? -e.data.betrag : e.data.betrag;
+        } else {
+          const c=calcWette(e.data);
+          rW += e.data.status==='gewonnen' ? c.profit : (e.data.typ==='freebet' ? 0 : -e.data.einsatz);
+        }
+      });
+      result.push({datum:d, label:fmtLabel(d), einAus:rTx-baseTx, wetten:rW-baseW, gesamt:(-rTx+rW)-(-baseTx+baseW)});
+    } else {
+      result.push({datum:d, label:fmtLabel(d), einAus:rTx-baseTx, wetten:rW-baseW, gesamt:(-rTx+rW)-(-baseTx+baseW)});
+    }
+  });
+
+  return result;
+}
+
+function fmtLabel(datum) {
+  const d=new Date(datum+'T12:00:00');
+  if(curHorizon==='Tag') return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  if(curHorizon==='Woche') return d.toLocaleDateString('de-DE',{weekday:'short',day:'numeric'});
+  if(curHorizon==='Monat') return d.toLocaleDateString('de-DE',{day:'numeric',month:'short'});
+  if(curHorizon==='3M'||curHorizon==='6M') return d.toLocaleDateString('de-DE',{day:'numeric',month:'short'});
+  return d.toLocaleDateString('de-DE',{month:'short',year:'2-digit'});
+}
+
+function buildCharts() {
+  const data=buildChartData();
+
+  // For Tag: show hours on x-axis with all 24h slots
+  const labels = data.map(p=>p.label);
+
+  // Only show points where value changed + neighbors (for stepped effect)
+  // Actually with stepped:true Chart.js handles this perfectly
+  const einAusData=data.map(p=>p.einAus);
+  const wettenData=data.map(p=>p.wetten);
+  const gesamtData=data.map(p=>p.gesamt);
+
+  Object.values(charts).forEach(c=>c.destroy());
+  charts={};
+
+  // Which dataset to show based on curStatTab
+  const configs = [
+    {id:'cChart0', title:'Interner Wetten-Profit', sub:'Profit aus abgeschlossenen Wetten inkl. Freebets', color:'#34d399', data:wettenData},
+    {id:'cChart1', title:'Ein-/Auszahlungssaldo', sub:'Einzahlungen (−) und Auszahlungen (+) aus deiner Tasche', color:'#60a5fa', data:einAusData},
+    {id:'cChart2', title:'Guthaben gesamt', sub:'Aktuelles Guthaben bei allen Anbietern (Einzahlungen − Auszahlungen + Wetten-Profit)', color:'#a78bfa', data:gesamtData},
+  ];
+
+  const wrap=document.getElementById('chartsWrap');
+
+  // Show only active tab chart + combo
+  const active = configs[curStatTab];
+  wrap.innerHTML=`
+    <div class="chart-card">
+      <div class="chart-title" style="color:${active.color}">${active.title}</div>
+      <div class="chart-sub">${active.sub}</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="cMain"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Alle Kurven im Vergleich</div>
+      <div class="chart-sub">Wetten-Profit · Ein-/Auszahlungen · Guthaben gesamt</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="cAll"></canvas></div>
+    </div>
+  `;
+
+  const commonOpts = (multi=false) => ({
+    responsive:true, maintainAspectRatio:false,
+    animation:{duration:200},
+    interaction:{mode:'index',intersect:false},
+    plugins:{
+      legend:{
+        display:multi,
+        labels:{color:'#94a3b8',usePointStyle:true,pointStyle:'circle',boxWidth:8,font:{size:12}}
+      },
+      tooltip:{
+        backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,
+        titleColor:'#94a3b8',bodyColor:'#f1f5f9',
+        callbacks:{label:ctx=>`${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`}
+      }
+    },
+    scales:{
+      x:{
+        grid:{display:false},
+        ticks:{color:'#64748b',font:{size:11},maxTicksLimit: curHorizon==='Woche'?7:curHorizon==='Tag'?12:10},
+        border:{display:false}
+      },
+      y:{
+        grid:{color:'rgba(51,65,85,0.5)'},
+        ticks:{color:'#64748b',font:{size:11},callback:v=>v.toFixed(0)+'€'},
+        border:{display:false}
+      }
+    }
+  });
+
+  const mkDs=(label,data,color,fill=true)=>({
+    label, data,
+    borderColor:color,
+    backgroundColor: fill ? color+'18' : 'transparent',
+    borderWidth:2.5,
+    pointRadius:0,
+    pointHoverRadius:5,
+    stepped:true,  // ← KEY: creates the staircase/step effect
+    fill: fill ? 'origin' : false,
+  });
+
+  // Main chart
+  charts.main = new Chart(document.getElementById('cMain'), {
+    type:'line',
+    data:{labels, datasets:[mkDs(active.title, active.data, active.color)]},
+    options: commonOpts(false)
+  });
+
+  // Combo
+  charts.all = new Chart(document.getElementById('cAll'), {
+    type:'line',
+    data:{labels, datasets:[
+      mkDs('Wetten-Profit', wettenData, '#34d399', false),
+      mkDs('Ein-/Auszahlungen', einAusData, '#60a5fa', false),
+      mkDs('Guthaben gesamt', gesamtData, '#a78bfa', false),
+    ]},
+    options: commonOpts(true)
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function cap(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+function kpiHtml(items) {
+  return items.map(s=>`<div class="kpi"><div class="kpi-label">${s.l}</div><div class="kpi-value" style="color:${s.c}">${s.v}</div></div>`).join('');
+}
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modal on background click
+document.querySelectorAll('.modal-bg').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderOverview();
+</script>
+</body>
+</html>
