@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Wetttracker">
+<title>Wetttracker</title>
+<style>
+:root {
+  --bg: #0e0f0e;
+  --s1: #161a15;
+  --s2: #1d2320;
+  --s3: #252c28;
+  --border: #2a3330;
+  --green: #2ecc71;
+  --green-dim: #1a4a2e;
+  --red: #e74c3c;
+  --red-dim: #4a1a1a;
+  --gold: #f0a500;
+  --gold-dim: #3a2800;
+  --paper: #e8ede8;
+  --muted: #6b7d70;
+  --mono: 'SF Mono','Roboto Mono',monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--paper); font-family: -apple-system, sans-serif; min-height: 100vh; }
+
+/* NAV */
+.nav { display: flex; background: var(--s1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+.nav-tab { flex: 1; padding: 13px 4px 11px; text-align: center; font-size: 11px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+.nav-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.nav-tab svg { display: block; margin: 0 auto 3px; }
+
+.page { display: none; padding: 16px 14px 40px; }
+.page.active { display: block; }
+
+/* CARDS */
+.card { background: var(--s1); border-radius: 16px; padding: 18px 16px; margin-bottom: 12px; }
+.card-title { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+
+/* INPUTS */
+.input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.inp { flex: 1; background: var(--bg); border: 1.5px solid var(--border); color: var(--paper); border-radius: 10px; padding: 13px 12px; font-size: 18px; font-weight: 700; outline: none; font-family: var(--mono); }
+.inp:focus { border-color: var(--gold); }
+.inp::placeholder { color: #3a4a3e; font-weight: 400; }
+.inp-label { font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 5px; }
+
+/* STEUER TOGGLE */
+.steuer-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border); margin-top: 4px; }
+.steuer-label { font-size: 14px; color: var(--paper); }
+.steuer-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.toggle { width: 46px; height: 26px; background: var(--border); border-radius: 13px; position: relative; cursor: pointer; transition: background .2s; border: none; flex-shrink: 0; }
+.toggle.on { background: var(--gold); }
+.toggle::after { content: ''; position: absolute; width: 20px; height: 20px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left .2s; }
+.toggle.on::after { left: 23px; }
+
+/* PREVIEW */
+.preview { background: var(--s2); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+.preview-label { font-size: 11px; color: var(--muted); }
+.preview-val { font-size: 20px; font-weight: 700; font-family: var(--mono); color: var(--gold); }
+
+/* BET BUTTONS */
+.bet-btns { display: flex; gap: 10px; }
+.btn-won { flex: 1; padding: 16px; border-radius: 12px; border: none; background: var(--green-dim); color: var(--green); font-size: 16px; font-weight: 800; cursor: pointer; border: 1.5px solid var(--green); transition: all .1s; letter-spacing: .02em; }
+.btn-won:active { background: var(--green); color: #000; transform: scale(0.97); }
+.btn-lost { flex: 1; padding: 16px; border-radius: 12px; border: none; background: var(--red-dim); color: var(--red); font-size: 16px; font-weight: 800; cursor: pointer; border: 1.5px solid var(--red); transition: all .1s; letter-spacing: .02em; }
+.btn-lost:active { background: var(--red); color: #fff; transform: scale(0.97); }
+
+/* STAT CARDS */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.stat-card { background: var(--s1); border-radius: 14px; padding: 14px 12px; }
+.stat-card.full { grid-column: 1/-1; }
+.stat-name { font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
+.stat-val { font-size: 22px; font-weight: 800; font-family: var(--mono); }
+.stat-val.pos { color: var(--green); }
+.stat-val.neg { color: var(--red); }
+.stat-val.neutral { color: var(--paper); }
+.stat-val.gold { color: var(--gold); }
+
+/* WIN RATE RING */
+.ring-wrap { display: flex; align-items: center; gap: 16px; }
+.ring-svg { flex-shrink: 0; }
+.ring-info { flex: 1; }
+.ring-pct { font-size: 32px; font-weight: 800; font-family: var(--mono); }
+.ring-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* CHART */
+.chart-card { background: var(--s1); border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+.chart-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+.chart-tab { padding: 5px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--muted); background: var(--bg); border: 1px solid var(--border); font-family: var(--mono); }
+.chart-tab.active { background: var(--gold); color: #000; border-color: var(--gold); }
+.svg-wrap { width: 100%; }
+.svg-wrap svg { width: 100%; display: block; }
+.chart-legend { display: flex; gap: 14px; margin-top: 10px; }
+.leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+/* VERLAUF */
+.bet-entry { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.bet-entry:last-child { border-bottom: none; }
+.be-left { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.be-title { font-size: 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.be-badge { font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 700; }
+.be-badge.won { background: var(--green-dim); color: var(--green); }
+.be-badge.lost { background: var(--red-dim); color: var(--red); }
+.be-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.be-amt { font-family: var(--mono); font-weight: 700; font-size: 14px; white-space: nowrap; margin-left: 8px; text-align: right; }
+.be-amt.pos { color: var(--green); }
+.be-amt.neg { color: var(--red); }
+.be-actions { display: flex; gap: 6px; margin-left: 6px; }
+
+.empty-msg { color: var(--muted); font-size: 13px; text-align: center; padding: 24px 0; }
+.btn-ghost { width: 100%; padding: 12px; border-radius: 10px; border: 1.5px solid var(--border); background: transparent; color: var(--paper); font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn-danger { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--red); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
+
+/* DIALOG */
+.dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 200; align-items: center; justify-content: center; }
+.dialog-overlay.show { display: flex; }
+.dialog-box { background: var(--s2); border-radius: 18px; padding: 24px 20px; width: 90%; max-width: 340px; }
+.dialog-box h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.dialog-box p { font-size: 13px; color: var(--muted); margin-bottom: 18px; line-height: 1.5; }
+.dialog-inp { width: 100%; background: var(--bg); border: 1.5px solid var(--border); color: var(--paper); border-radius: 10px; padding: 11px 12px; font-size: 16px; outline: none; font-family: var(--mono); margin-bottom: 8px; }
+.dialog-btns { display: flex; gap: 8px; margin-top: 16px; }
+.dialog-btns button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; }
+.d-cancel { background: var(--border); color: var(--paper); }
+.d-confirm { background: var(--gold); color: #000; }
+.d-danger { background: var(--red); color: #fff; }
+
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--s3); color: var(--paper); padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 999; white-space: nowrap; border: 1px solid var(--border); }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-tab active" data-page="home">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+    Wette
+  </div>
+  <div class="nav-tab" data-page="statistik">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+    Statistik
+  </div>
+  <div class="nav-tab" data-page="uebersicht">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Übersicht
+  </div>
+  <div class="nav-tab" data-page="verlauf">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    Verlauf
+  </div>
+  <div class="nav-tab" data-page="einstellungen">
+    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Einst.
+  </div>
+</nav>
+
+<!-- HOME -->
+<div class="page active" id="page-home">
+  <div style="height:14px"></div>
+
+  <div class="card">
+    <div class="card-title">Neue Wette</div>
+    <div class="inp-label">Einsatz (€)</div>
+    <div class="input-row">
+      <input class="inp" type="number" id="einsatz" placeholder="0,00" inputmode="decimal" step="0.01" min="0">
+    </div>
+    <div class="inp-label">Quote</div>
+    <div class="input-row">
+      <input class="inp" type="number" id="quote" placeholder="1,00" inputmode="decimal" step="0.01" min="1">
+    </div>
+    <div class="inp-label">Notiz (optional)</div>
+    <div class="input-row">
+      <input class="inp" type="text" id="notiz" placeholder="z.B. Bayern vs Dortmund" style="font-size:14px;font-weight:400;font-family:-apple-system,sans-serif">
+    </div>
+
+    <div class="preview" id="preview">
+      <div>
+        <div class="preview-label">Möglicher Gewinn</div>
+        <div class="preview-label" id="steuerHinweis" style="color:var(--gold);margin-top:2px"></div>
+      </div>
+      <div class="preview-val" id="previewVal">€0,00</div>
+    </div>
+
+    <div class="bet-btns">
+      <button class="btn-won" id="btnWon">✓ Gewonnen</button>
+      <button class="btn-lost" id="btnLost">✗ Verloren</button>
+    </div>
+
+    <div class="steuer-row">
+      <div>
+        <div class="steuer-label">Steuer auf Gewinn</div>
+        <div class="steuer-sub" id="steuerSub">Aus – kein Abzug</div>
+      </div>
+      <button class="toggle" id="steuerToggle"></button>
+    </div>
+  </div>
+</div>
+
+<!-- STATISTIK -->
+<div class="page" id="page-statistik">
+  <div style="height:14px"></div>
+
+  <div class="chart-tabs" style="margin-bottom:14px" id="statRangeTabs">
+    <div class="chart-tab active" data-srange="0">Gesamt</div>
+    <div class="chart-tab" data-srange="1">Heute</div>
+    <div class="chart-tab" data-srange="7">7 Tage</div>
+    <div class="chart-tab" data-srange="30">30 Tage</div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-card full">
+      <div class="stat-name">Bilanz im Zeitraum</div>
+      <div class="stat-val neutral" id="sBilanz">€0,00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-name">Einsatz</div>
+      <div class="stat-val neutral" id="sEinsatz">€0,00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-name">Gewinn (netto)</div>
+      <div class="stat-val pos" id="sGewinn">€0,00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-name">Wetten</div>
+      <div class="stat-val neutral" id="sAnzahl">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-name">Steuer bezahlt</div>
+      <div class="stat-val neg" id="sSteuer">€0,00</div>
+    </div>
+  </div>
+
+  <div class="stat-card" style="margin-bottom:12px">
+    <div class="stat-name">Trefferquote</div>
+    <div class="ring-wrap">
+      <svg class="ring-svg" width="80" height="80" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r="32" fill="none" stroke="#2a3330" stroke-width="8"/>
+        <circle cx="40" cy="40" r="32" fill="none" stroke="#f0a500" stroke-width="8"
+          stroke-dasharray="201" stroke-dashoffset="201"
+          stroke-linecap="round" transform="rotate(-90 40 40)"
+          id="ringArc"/>
+      </svg>
+      <div class="ring-info">
+        <div class="ring-pct" id="ringPct">0%</div>
+        <div class="ring-sub" id="ringSub">0 gewonnen · 0 verloren</div>
+        <div class="ring-sub" style="margin-top:4px" id="ringStreak"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="card-title" style="margin-bottom:8px">Bilanz-Verlauf</div>
+    <div class="chart-tabs" id="chartTabs">
+      <div class="chart-tab active" data-range="10">Letzte 10</div>
+      <div class="chart-tab" data-range="30">30 Tage</div>
+      <div class="chart-tab" data-range="0">Alle</div>
+    </div>
+    <div class="svg-wrap" id="chartWrap"></div>
+  </div>
+</div>
+
+<!-- ÜBERSICHT -->
+<div class="page" id="page-uebersicht">
+  <div style="height:14px"></div>
+  <div class="card">
+    <div class="card-title">Alle Zeit</div>
+    <div class="stat-grid" style="margin-bottom:0">
+      <div class="stat-card full"><div class="stat-name">Gesamtbilanz</div><div class="stat-val neutral" id="uBilanz">€0,00</div></div>
+      <div class="stat-card"><div class="stat-name">Einsatz gesamt</div><div class="stat-val neutral" id="uEinsatz">€0,00</div></div>
+      <div class="stat-card"><div class="stat-name">Gewinn gesamt</div><div class="stat-val pos" id="uGewinn">€0,00</div></div>
+      <div class="stat-card"><div class="stat-name">Wetten gesamt</div><div class="stat-val neutral" id="uAnzahl">0</div></div>
+      <div class="stat-card"><div class="stat-name">Steuer gesamt</div><div class="stat-val neg" id="uSteuer">€0,00</div></div>
+      <div class="stat-card"><div class="stat-name">Trefferquote</div><div class="stat-val gold" id="uRate">0%</div></div>
+      <div class="stat-card"><div class="stat-name">Ø Quote</div><div class="stat-val neutral" id="uAvgQuote">0,00</div></div>
+      <div class="stat-card"><div class="stat-name">Ø Einsatz</div><div class="stat-val neutral" id="uAvgEinsatz">€0,00</div></div>
+      <div class="stat-card full"><div class="stat-name">Beste Wette</div><div class="stat-val pos" id="uBest">–</div></div>
+      <div class="stat-card full"><div class="stat-name">Schlechteste Wette</div><div class="stat-val neg" id="uWorst">–</div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-title" style="margin-bottom:10px">Monatliche Bilanz</div>
+    <div class="svg-wrap" id="uMonthChart"></div>
+  </div>
+</div>
+
+<!-- VERLAUF -->
+<div class="page" id="page-verlauf">
+  <div style="height:14px"></div>
+  <div class="card">
+    <div class="card-title">Alle Wetten</div>
+    <div id="verlaufList"></div>
+  </div>
+</div>
+
+<!-- EINSTELLUNGEN -->
+<div class="page" id="page-einstellungen">
+  <div style="height:14px"></div>
+  <div class="card">
+    <div class="card-title">Daten</div>
+    <button class="btn-danger" id="deleteAllBtn">Alle Daten löschen</button>
+  </div>
+</div>
+
+<!-- DIALOGS -->
+<div class="dialog-overlay" id="deleteDialog">
+  <div class="dialog-box">
+    <h3>Alles löschen?</h3>
+    <p>Alle Wetten werden unwiderruflich gelöscht.</p>
+    <div class="dialog-btns">
+      <button class="d-cancel" id="deleteCancelBtn">Abbrechen</button>
+      <button class="d-danger" id="deleteConfirmBtn">Löschen</button>
+    </div>
+  </div>
+</div>
+
+<div class="dialog-overlay" id="delEntryDialog">
+  <div class="dialog-box">
+    <h3>Wirklich löschen?</h3>
+    <p id="delEntryMsg"></p>
+    <div class="dialog-btns">
+      <button class="d-cancel" id="delEntryCancelBtn">Abbrechen</button>
+      <button class="d-danger" id="delEntryConfirmBtn">Ja, löschen</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STEUER_RATE = 0.05;
+let state = { bets: [], steuer: false };
+let chartRange = 10;
+let statRange = 0; // 0=all, 1=today, 7=7days, 30=30days
+let delIdx = -1;
+let currentPage = 'home';
+
+function fmt(n){ return (n<0?'−':'') + '€' + Math.abs(n).toFixed(2).replace('.',','); }
+function fmtShort(n){ return (n<0?'−':'') + '€' + Math.abs(n).toFixed(0); }
+
+function showToast(msg, color){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color || 'var(--border)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+
+function load(){
+  try{
+    const r = localStorage.getItem('wetttracker-v1');
+    if(r){ const p = JSON.parse(r); state = Object.assign(state, p); }
+  }catch(e){}
+  document.getElementById('steuerToggle').className = 'toggle' + (state.steuer ? ' on' : '');
+  document.getElementById('steuerSub').textContent = state.steuer ? 'An – 5% auf Gewinn' : 'Aus – kein Abzug';
+  updatePreview();
+}
+
+function save(){
+  try{ localStorage.setItem('wetttracker-v1', JSON.stringify(state)); }
+  catch(e){ showToast('Speichern fehlgeschlagen'); }
+}
+
+function calcGewinn(einsatz, quote){
+  const brutto = einsatz * quote;
+  const steuer = state.steuer ? brutto * STEUER_RATE : 0;
+  return { brutto, steuer, netto: brutto - steuer };
+}
+
+function updatePreview(){
+  const e = parseFloat(document.getElementById('einsatz').value) || 0;
+  const q = parseFloat(document.getElementById('quote').value) || 0;
+  const { brutto, steuer, netto } = calcGewinn(e, q);
+  document.getElementById('previewVal').textContent = e>0&&q>0 ? fmt(netto) : '€0,00';
+  document.getElementById('steuerHinweis').textContent = state.steuer && e>0&&q>0 ? `nach 5% Steuer (−${fmt(steuer).slice(1)})` : '';
+}
+
+document.getElementById('einsatz').addEventListener('input', updatePreview);
+document.getElementById('quote').addEventListener('input', updatePreview);
+
+document.getElementById('steuerToggle').addEventListener('click', ()=>{
+  state.steuer = !state.steuer;
+  document.getElementById('steuerToggle').className = 'toggle' + (state.steuer ? ' on' : '');
+  document.getElementById('steuerSub').textContent = state.steuer ? 'An – 5% auf Gewinn' : 'Aus – kein Abzug';
+  save(); updatePreview();
+});
+
+function placeBet(won){
+  const einsatz = parseFloat(document.getElementById('einsatz').value);
+  const quote = parseFloat(document.getElementById('quote').value);
+  if(!einsatz || einsatz<=0){ showToast('Bitte Einsatz eingeben'); return; }
+  if(!quote || quote<=1){ showToast('Quote muss größer als 1 sein'); return; }
+
+  const { brutto, steuer, netto } = calcGewinn(einsatz, quote);
+  const profit = won ? netto - einsatz : -einsatz;
+
+  state.bets.push({
+    einsatz, quote, notiz: document.getElementById('notiz').value.trim(),
+    won, brutto, steuer, netto, profit,
+    date: new Date().toISOString()
+  });
+
+  document.getElementById('einsatz').value = '';
+  document.getElementById('quote').value = '';
+  document.getElementById('notiz').value = '';
+  updatePreview();
+  save();
+
+  if(won){
+    showToast('🏆 +' + fmt(profit).slice(1) + ' Gewinn!', 'var(--green)');
+  } else {
+    showToast('✗ −' + fmt(einsatz).slice(1) + ' verloren', 'var(--red)');
+  }
+
+  if(currentPage === 'statistik') renderStatistik();
+  if(currentPage === 'verlauf') renderVerlauf();
+}
+
+document.getElementById('btnWon').addEventListener('click', ()=>placeBet(true));
+document.getElementById('btnLost').addEventListener('click', ()=>placeBet(false));
+
+// ── STATISTIK ──────────────────────────────────────────────
+function getFilteredBets(){
+  const now = new Date();
+  if(statRange === 0) return state.bets;
+  if(statRange === 1){
+    const today = now.toDateString();
+    return state.bets.filter(b => new Date(b.date).toDateString() === today);
+  }
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-statRange);
+  return state.bets.filter(b => new Date(b.date) >= cutoff);
+}
+
+function renderStatistik(){
+  const bets = getFilteredBets();
+  const won = bets.filter(b=>b.won);
+  const lost = bets.filter(b=>!b.won);
+  const totalEinsatz = bets.reduce((a,b)=>a+b.einsatz,0);
+  const totalGewinn = won.reduce((a,b)=>a+b.netto,0);
+  const totalSteuer = bets.reduce((a,b)=>a+(b.steuer||0),0);
+  const bilanz = bets.reduce((a,b)=>a+b.profit,0);
+  const winRate = bets.length ? (won.length/bets.length)*100 : 0;
+
+  document.getElementById('sBilanz').textContent = fmt(bilanz);
+  document.getElementById('sBilanz').className = 'stat-val ' + (bilanz>0?'pos':bilanz<0?'neg':'neutral');
+  document.getElementById('sEinsatz').textContent = fmt(totalEinsatz);
+  document.getElementById('sGewinn').textContent = fmt(totalGewinn);
+  document.getElementById('sAnzahl').textContent = bets.length;
+  document.getElementById('sSteuer').textContent = fmt(totalSteuer);
+
+  // Ring
+  const pct = Math.round(winRate);
+  const circ = 201;
+  document.getElementById('ringArc').setAttribute('stroke-dashoffset', circ - (circ * pct/100));
+  document.getElementById('ringPct').textContent = pct + '%';
+  document.getElementById('ringSub').textContent = won.length + ' gewonnen · ' + lost.length + ' verloren';
+
+  // Streak
+  let streak = 0, streakType = '';
+  for(let i=bets.length-1;i>=0;i--){
+    if(i===bets.length-1){ streak=1; streakType=bets[i].won?'W':'L'; }
+    else if((bets[i].won && streakType==='W')||((!bets[i].won) && streakType==='L')) streak++;
+    else break;
+  }
+  document.getElementById('ringStreak').textContent = bets.length ?
+    (streakType==='W' ? `🔥 ${streak}x Gewinnserie` : `❄️ ${streak}x Verlustserie`) : '';
+
+  renderChart();
+}
+
+function renderChart(){
+  const wrap = document.getElementById('chartWrap');
+  let bets = state.bets.slice();
+
+  if(chartRange === 10) bets = bets.slice(-10);
+  else if(chartRange === 30){
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate()-30);
+    bets = bets.filter(b=>new Date(b.date)>=cutoff);
+  }
+
+  if(!bets.length){
+    wrap.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:24px 0">Noch keine Daten</div>';
+    return;
+  }
+
+  // cumulative profit line
+  const W=320, H=160, padL=42, padB=28, padT=14, padR=8;
+  const cW=W-padL-padR, cH=H-padB-padT;
+
+  let cumulative = 0;
+  const points = bets.map((b,i)=>{ cumulative+=b.profit; return {x:i, y:cumulative, won:b.won}; });
+  const allY = points.map(p=>p.y);
+  const minY = Math.min(0,...allY), maxY = Math.max(0,...allY);
+  const rangeY = maxY-minY || 1;
+
+  function px(i){ return padL + (i/(Math.max(points.length-1,1)))*cW; }
+  function py(v){ return padT + cH*(1-(v-minY)/rangeY); }
+
+  // zero line
+  const zeroY = py(0);
+  let svgEl = `<line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#2a3330" stroke-width="1" stroke-dasharray="4,3"/>`;
+
+  // Y labels
+  const steps = [minY, 0, maxY].filter((v,i,a)=>a.indexOf(v)===i);
+  steps.forEach(v=>{
+    const y=py(v);
+    svgEl+=`<text x="${padL-4}" y="${y+3}" text-anchor="end" font-size="9" fill="#6b7d70" font-family="monospace">${fmtShort(v)}</text>`;
+  });
+
+  // fill area
+  if(points.length>1){
+    const linePoints = points.map((p,i)=>`${px(i)},${py(p.y)}`).join(' ');
+    const posColor = '#2ecc71', negColor = '#e74c3c';
+    const lastColor = cumulative>=0 ? posColor : negColor;
+    svgEl += `<polyline points="${linePoints}" fill="none" stroke="${lastColor}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+
+  // dots
+  points.forEach((p,i)=>{
+    const color = p.won ? '#2ecc71' : '#e74c3c';
+    svgEl+=`<circle cx="${px(i)}" cy="${py(p.y)}" r="4" fill="${color}" stroke="var(--bg)" stroke-width="1.5"/>`;
+  });
+
+  // X labels
+  const step = Math.ceil(points.length/6);
+  points.forEach((p,i)=>{
+    if(i%step===0||i===points.length-1){
+      const d=new Date(bets[i].date);
+      const label=d.getDate()+'.'+( d.getMonth()+1);
+      svgEl+=`<text x="${px(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="#6b7d70" font-family="monospace">${label}</text>`;
+    }
+  });
+
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svgEl}</svg>`;
+}
+
+// ── VERLAUF ──────────────────────────────────────────────
+function renderVerlauf(){
+  const bets = state.bets.slice().reverse();
+  const list = document.getElementById('verlaufList');
+  if(!bets.length){ list.innerHTML='<div class="empty-msg">Noch keine Wetten.</div>'; return; }
+
+  list.innerHTML = bets.map((b,ri)=>{
+    const idx = state.bets.length-1-ri;
+    const d = new Date(b.date);
+    const ds = d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'})+' · '+d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+    const amtStr = b.won ? '+'+fmt(b.profit).slice(1) : fmt(b.profit);
+    const steuerStr = b.won&&b.steuer>0 ? ` (−${fmt(b.steuer).slice(1)} St.)` : '';
+    return `<div class="bet-entry">
+      <div class="be-left">
+        <div class="be-title">
+          <span>${b.notiz||'Wette'}</span>
+          <span class="be-badge ${b.won?'won':'lost'}">${b.won?'✓ Gewonnen':'✗ Verloren'}</span>
+        </div>
+        <div class="be-meta">${ds} · Einsatz ${fmt(b.einsatz)} · Quote ${b.quote.toFixed(2)}${steuerStr}</div>
+      </div>
+      <div style="display:flex;align-items:center">
+        <div class="be-amt ${b.won?'pos':'neg'}">${amtStr}</div>
+        <div class="be-actions">
+          <button onclick="openDelEntry(${idx})" style="background:none;border:none;color:#5a6a5e;font-size:15px;cursor:pointer;padding:4px">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openDelEntry(idx){
+  delIdx = idx;
+  const b = state.bets[idx];
+  document.getElementById('delEntryMsg').textContent = `"${b.notiz||'Wette'}" · Einsatz ${fmt(b.einsatz)} · ${b.won?'Gewonnen':'Verloren'}`;
+  document.getElementById('delEntryDialog').classList.add('show');
+}
+
+document.getElementById('delEntryCancelBtn').addEventListener('click',()=>{
+  document.getElementById('delEntryDialog').classList.remove('show');
+});
+document.getElementById('delEntryConfirmBtn').addEventListener('click',()=>{
+  state.bets.splice(delIdx,1);
+  save(); renderVerlauf();
+  if(currentPage==='statistik') renderStatistik();
+  document.getElementById('delEntryDialog').classList.remove('show');
+  showToast('Wette gelöscht');
+});
+
+// stat range tabs
+document.getElementById('statRangeTabs').addEventListener('click', e=>{
+  const tab = e.target.closest('[data-srange]');
+  if(!tab) return;
+  document.querySelectorAll('[data-srange]').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  statRange = parseInt(tab.dataset.srange);
+  renderStatistik();
+});
+
+// ── ÜBERSICHT ──────────────────────────────────────────────
+function renderUebersicht(){
+  const bets = state.bets;
+  const won = bets.filter(b=>b.won);
+  const bilanz = bets.reduce((a,b)=>a+b.profit,0);
+  const einsatz = bets.reduce((a,b)=>a+b.einsatz,0);
+  const gewinn = won.reduce((a,b)=>a+b.netto,0);
+  const steuer = bets.reduce((a,b)=>a+(b.steuer||0),0);
+  const rate = bets.length ? Math.round(won.length/bets.length*100) : 0;
+  const avgQuote = bets.length ? bets.reduce((a,b)=>a+b.quote,0)/bets.length : 0;
+  const avgEinsatz = bets.length ? einsatz/bets.length : 0;
+
+  const bestBet = bets.filter(b=>b.won).sort((a,b)=>b.profit-a.profit)[0];
+  const worstBet = bets.filter(b=>!b.won).sort((a,b)=>a.profit-b.profit)[0];
+
+  document.getElementById('uBilanz').textContent = fmt(bilanz);
+  document.getElementById('uBilanz').className = 'stat-val '+(bilanz>0?'pos':bilanz<0?'neg':'neutral');
+  document.getElementById('uEinsatz').textContent = fmt(einsatz);
+  document.getElementById('uGewinn').textContent = fmt(gewinn);
+  document.getElementById('uAnzahl').textContent = bets.length;
+  document.getElementById('uSteuer').textContent = fmt(steuer);
+  document.getElementById('uRate').textContent = rate+'%';
+  document.getElementById('uAvgQuote').textContent = avgQuote.toFixed(2);
+  document.getElementById('uAvgEinsatz').textContent = fmt(avgEinsatz);
+  document.getElementById('uBest').textContent = bestBet ? `+${fmt(bestBet.profit).slice(1)} · ${bestBet.notiz||'Wette'}` : '–';
+  document.getElementById('uWorst').textContent = worstBet ? `${fmt(worstBet.profit)} · ${worstBet.notiz||'Wette'}` : '–';
+
+  // Monthly bar chart
+  const monthMap = {};
+  bets.forEach(b=>{
+    const d=new Date(b.date);
+    const key=d.getFullYear()+'-'+(d.getMonth()+1);
+    if(!monthMap[key]) monthMap[key]={profit:0,label:['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'][d.getMonth()]};
+    monthMap[key].profit+=b.profit;
+  });
+  const months = Object.values(monthMap);
+
+  const wrap = document.getElementById('uMonthChart');
+  if(!months.length){ wrap.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px 0">Noch keine Daten</div>'; return; }
+
+  const W=320,H=140,padL=42,padB=24,padT=10,padR=8;
+  const cW=W-padL-padR, cH=H-padB-padT;
+  const maxAbs = Math.max(...months.map(m=>Math.abs(m.profit)),1);
+  const barGap=4, barW=Math.max(6,(cW-(months.length-1)*barGap)/months.length);
+  const zeroY=padT+cH*0.5;
+  let svg=`<line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#2a3330" stroke-width="1" stroke-dasharray="3,3"/>`;
+  months.forEach((m,i)=>{
+    const x=padL+i*(barW+barGap);
+    const h=Math.abs(m.profit)/maxAbs*(cH/2);
+    const color=m.profit>=0?'#2ecc71':'#e74c3c';
+    const y=m.profit>=0?zeroY-h:zeroY;
+    svg+=`<rect x="${x}" y="${y}" width="${barW}" height="${h}" fill="${color}" rx="2"/>`;
+    svg+=`<text x="${x+barW/2}" y="${H-6}" text-anchor="middle" font-size="9" fill="#6b7d70" font-family="monospace">${m.label}</text>`;
+  });
+  svg+=`<text x="${padL-4}" y="${padT+3}" text-anchor="end" font-size="9" fill="#6b7d70" font-family="monospace">+${fmtShort(maxAbs).slice(1)}</text>`;
+  svg+=`<text x="${padL-4}" y="${H-padB+3}" text-anchor="end" font-size="9" fill="#6b7d70" font-family="monospace">-${fmtShort(maxAbs).slice(1)}</text>`;
+  wrap.innerHTML=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${svg}</svg>`;
+}
+  const tab=e.target.closest('.chart-tab');
+  if(!tab) return;
+  document.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+  tab.classList.add('active');
+  chartRange=parseInt(tab.dataset.range);
+  renderChart();
+});
+
+// delete all
+document.getElementById('deleteAllBtn').addEventListener('click',()=>{
+  document.getElementById('deleteDialog').classList.add('show');
+});
+document.getElementById('deleteCancelBtn').addEventListener('click',()=>{
+  document.getElementById('deleteDialog').classList.remove('show');
+});
+document.getElementById('deleteConfirmBtn').addEventListener('click',()=>{
+  localStorage.removeItem('wetttracker-v1');
+  state={bets:[],steuer:state.steuer};
+  renderVerlauf();
+  document.getElementById('deleteDialog').classList.remove('show');
+  showToast('Alle Daten gelöscht');
+});
+
+// nav
+function showPage(name){
+  currentPage=name;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  const tab=document.querySelector(`[data-page="${name}"]`);
+  if(tab) tab.classList.add('active');
+  if(name==='statistik') renderStatistik();
+  if(name==='verlauf') renderVerlauf();
+  if(name==='uebersicht') renderUebersicht();
+}
+
+document.querySelectorAll('.nav-tab').forEach(tab=>{
+  tab.addEventListener('click',()=>showPage(tab.dataset.page));
+});
+
+load();
+</script>
+</body>
+</html>
